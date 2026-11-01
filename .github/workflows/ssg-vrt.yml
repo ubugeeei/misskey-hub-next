@@ -17,13 +17,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        viewport: [mobile]
         theme: [light, dark]
-        raster: [software]
-        retention: [none]
-        jpeg: [none, frame, tile, clear]
-        isolation: [context]
-        workers: [1]
+        browser: [shell-software, chromium-software, chromium-default]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -39,19 +34,20 @@ jobs:
           github-token: ${{ github.token }}
       - name: Repeat unchanged reference control and optimized comparison
         env:
-          CONTROL_VIEWPORT: ${{ matrix.viewport }}
+          CONTROL_VIEWPORT: mobile
           CONTROL_THEME: ${{ matrix.theme }}
-          VRT_RASTER_VARIANT: ${{ matrix.raster }}
-          VRT_BROWSER_ISOLATION: ${{ matrix.isolation }}
-          CONTROL_WORKERS: ${{ matrix.workers }}
-          VRT_JPEG_RETENTION: ${{ matrix.retention }}
-          VRT_JPEG_POLICY: ${{ matrix.jpeg }}
+          VRT_RASTER_VARIANT: software
+          VRT_BROWSER_ISOLATION: context
+          CONTROL_WORKERS: "1"
+          VRT_JPEG_RETENTION: none
+          VRT_BROWSER_CHANNEL: ${{ startsWith(matrix.browser, 'chromium') && 'chromium' || 'shell' }}
+          VRT_SOFTWARE_COMPOSITING: ${{ endsWith(matrix.browser, 'default') && '0' || '1' }}
         run: |
           node .vrt-control/clip-control.mjs
           node .vrt-control/raster-control.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: jpeg-policy-${{ matrix.theme }}-${{ matrix.jpeg }}
+          name: browser-${{ matrix.theme }}-${{ matrix.browser }}
           path: output/playwright/
           retention-days: 7
