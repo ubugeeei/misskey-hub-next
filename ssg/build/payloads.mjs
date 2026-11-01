@@ -12,7 +12,9 @@ export function assignLanes(pages, count) {
 		const lane = lanes.reduce((left, right) => (left.length <= right.length ? left : right));
 		lane.push(...group);
 	}
-	return lanes;
+	// Different locale groups can share surrounding/related objects. If groups
+	// share a worker, retain the original page order before those objects mutate.
+	return lanes.map((lane) => lane.sort((left, right) => left - right));
 }
 
 export function preparePayloads(pages) {

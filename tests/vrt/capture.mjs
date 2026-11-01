@@ -186,16 +186,20 @@ export async function capturePage(page, url, { clockTime } = {}) {
 			};
 		const started = Date.now();
 		let previous = await takeSnapshot(page);
+    let stableSince = Date.now(), stableFrames = 0;
 		let stable = false;
 		do {
+      await page.waitForTimeout(100);
 			const current = await takeSnapshot(page);
-			stable = compareCaptures(previous, current).equal;
+      if (compareCaptures(previous, current).equal) stableFrames++;
+      else { stableSince = Date.now(); stableFrames = 0; }
+      stable = stableFrames >= 2 && Date.now() - stableSince >= 500;
 			previous = current;
-		} while (!stable && Date.now() - started < 5000);
+		} while (!stable && Date.now() - started < 10000);
 		if (!stable)
 			return {
 				status: "unstable",
-				errors: ["No two consecutive identical frames within 5 seconds"],
+				errors: ["No three identical frames spanning 500ms within 10 seconds"],
 			};
 		const diagnostics = await page.evaluate(() => ({
       html: document.documentElement.outerHTML.replaceAll(location.origin, "ORIGIN"),
