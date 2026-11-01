@@ -239,6 +239,19 @@ export async function capturePage(page, url, { clockTime } = {}) {
 				errors,
 				finalPath: new URL(page.url()).pathname,
 			};
+    if (process.env.VRT_RASTER_VARIANT?.includes("layout")) {
+      await page.evaluate(() => {
+        const body = document.body;
+        const before = body.outerHTML;
+        const style = body.getAttribute("style");
+        body.style.setProperty("display", "none", "important");
+        void body.offsetHeight;
+        if (style === null) body.removeAttribute("style"); else body.setAttribute("style", style);
+        void body.offsetHeight;
+        if (body.outerHTML !== before) throw Error("Layout rebuild changed DOM");
+      });
+      await page.waitForTimeout(200);
+    }
     const { stable, capture: previous } = await captureStableFrames(() => takeSnapshot(page), { wait: ms => page.waitForTimeout(ms) });
 		if (!stable)
 			return {
