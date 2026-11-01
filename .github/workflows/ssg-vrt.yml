@@ -1,4 +1,4 @@
-name: SSG Chromium 145 controlled frame qualification
+name: SSG glyph and canvas capture contract
 on:
   workflow_dispatch:
 permissions:
@@ -7,18 +7,19 @@ jobs:
   contract:
     runs-on: ubuntu-latest
     container:
-      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      image: ${{ matrix.image }}
     strategy:
       fail-fast: false
       matrix:
-        viewport: [desktop, mobile]
-        theme: [light, dark]
+        include:
+          - sdk: original
+            image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+          - sdk: upgraded
+            image: mcr.microsoft.com/playwright:v1.64.1-noble@sha256:47b510dd9230bf0b9bfc9b20102241e577ea7a99334ab4c3ca19f19770e9b8ea
     env:
-      CONTROL_VIEWPORT: ${{ matrix.viewport }}
-      CONTROL_THEME: ${{ matrix.theme }}
       PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
       VRT_CONTROLLED_FRAMES: "1"
-    timeout-minutes: 55
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -26,19 +27,12 @@ jobs:
         with:
           node-version: "26.13.0"
           cache: pnpm
+      - name: Match the upgraded SDK to its pinned image
+        if: matrix.sdk == 'upgraded'
+        run: |
+          git fetch --depth=1 origin 172772b
+          git show FETCH_HEAD:package.json > package.json
+          git show FETCH_HEAD:pnpm-lock.yaml > pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile --ignore-scripts
-      - uses: actions/download-artifact@v4
-        with:
-          name: vrt-sites
-          run-id: 41296551808
-          github-token: ${{ github.token }}
-      - name: Verify the exact production capture contract
-        run: node tests/vrt/frame-contract.mjs
-      - name: Qualify original browser with controlled compositor frames
-        run: node .vrt-control/legacy-frames.mjs
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: chromium145-${{ matrix.viewport }}-${{ matrix.theme }}
-          path: output/playwright/
-          retention-days: 7
+      - name: Verify every repeated code/copyright cell and 2D/WebGL canvas
+        run: node .vrt-control/glyph-contract.mjs
