@@ -190,6 +190,32 @@ export async function capturePage(page, url, { clockTime } = {}) {
 		}
 		await page.mouse.move(0, 0);
 		await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+    // Preserve the chosen authored frame as ordinary CSS, then cancel CSS
+    // animation so opacity/transform layers cannot retain animated surfaces.
+    const motionRules = await page.evaluate(() => {
+      const rules = [];
+      const metadata = new Set(["offset", "computedOffset", "easing", "composite"]);
+      for (const animation of document.getAnimations()) {
+        if (!animation.animationName || !animation.effect?.target) continue;
+        const effect = animation.effect, target = effect.target;
+        const properties = new Set(effect.getKeyframes().flatMap(frame => Object.keys(frame).filter(key => !metadata.has(key))));
+        const computed = getComputedStyle(target, effect.pseudoElement ?? null);
+        const declaration = document.createElement("div").style;
+        for (const key of properties) {
+          const property = key.replace(/[A-Z]/g, letter => "-" + letter.toLowerCase());
+          declaration.setProperty(property, computed.getPropertyValue(property), "important");
+        }
+        const parts = [];
+        for (let node = target; node; node = node.parentElement) {
+          const siblings = node.parentElement ? [...node.parentElement.children].filter(sibling => sibling.localName === node.localName && sibling.namespaceURI === node.namespaceURI) : [node];
+          parts.unshift(`${CSS.escape(node.localName)}:nth-of-type(${siblings.indexOf(node) + 1})`);
+        }
+        rules.push(`${parts.join(" > ")}${effect.pseudoElement ?? ""} { ${declaration.cssText} }`);
+      }
+      return rules.join("\n");
+    });
+    await page.addStyleTag({ content: `*, *::before, *::after { animation: none !important; transition: none !important; }\n${motionRules}` });
+
 		if (errors.length)
 			return {
 				status: "runtime-error",
