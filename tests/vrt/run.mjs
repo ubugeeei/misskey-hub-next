@@ -74,8 +74,10 @@ const scriptHash = createHash("sha256")
 	.update(await readFile(new URL("./snapshot.mjs", import.meta.url)))
 	.update(await readFile(new URL("./http.mjs", import.meta.url)))
 	.update(await readFile(new URL("./readiness.mjs", import.meta.url)))
+  .update(await readFile(new URL("./frames.mjs", import.meta.url)))
 	.digest("hex");
 const manifest = {
+  frameControlMode: process.env.VRT_FRAME_MODE ?? "auto",
   jpegDelivery: process.env.VRT_JPEG_DELIVERY ?? "direct",
   nativeScreenProfile: process.env.VRT_NATIVE_SCREEN === "1",
   browserChannel: process.env.VRT_BROWSER_CHANNEL ?? "shell",
@@ -268,7 +270,9 @@ try {
 		"--force-color-profile=srgb",
 		"--disable-threaded-animation",
 	];
-	if (process.env.VRT_SOFTWARE_COMPOSITING === "0") manifest.browserArgs = manifest.browserArgs.filter(arg => arg !== "--disable-gpu-compositing");
+	if (process.env.VRT_FRAME_MODE === "manual" || process.env.VRT_FRAME_MODE === "flags") manifest.browserArgs.push("--disable-threaded-scrolling", "--disable-new-content-rendering-timeout");
+  if (process.env.VRT_FRAME_MODE === "manual") manifest.browserArgs.push("--enable-begin-frame-control");
+  if (process.env.VRT_SOFTWARE_COMPOSITING === "0") manifest.browserArgs = manifest.browserArgs.filter(arg => arg !== "--disable-gpu-compositing");
   browser = await chromium.launch({ channel: process.env.VRT_BROWSER_CHANNEL === "chromium" ? "chromium" : undefined, args: manifest.browserArgs });
 	manifest.browserVersion = browser.version();
 	await writeFile(manifestFile, JSON.stringify(manifest, null, 2) + "\n");

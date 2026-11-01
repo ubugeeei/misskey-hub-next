@@ -1,6 +1,7 @@
 import { PNG } from "pngjs";
 import { takeSnapshot } from "./snapshot.mjs";
 import { waitForLocalIdle } from "./readiness.mjs";
+import { startFrameControl } from "./frames.mjs";
 
 // Identical PNG bytes necessarily contain identical pixels. Decode only when
 // encoded bytes differ; metadata/compression differences still use strict RGBA.
@@ -97,6 +98,7 @@ export async function captureStableFrames(capture, { wait, now = () => performan
 export async function capturePage(page, url, { clockTime } = {}) {
 	const clock = /\/features\/mfm\//.test(url) || !/\/(docs|blog)\//.test(url);
 	const errors = [];
+  let frameControl;
 	const pendingLocalRequests = new Set();
 	let lastLocalActivity = performance.now();
 	page.on("request", (request) => {
@@ -122,6 +124,7 @@ export async function capturePage(page, url, { clockTime } = {}) {
 			report(`${response.status()} ${response.url()}`);
 	});
 	try {
+    frameControl = await startFrameControl(page);
 		if (clock) await page.clock.install({ time: new Date(clockTime ?? Date.now()) });
 		const response = await page.goto(url, {
 			waitUntil: "load",
@@ -289,6 +292,7 @@ export async function capturePage(page, url, { clockTime } = {}) {
 				errors,
 				finalPath: new URL(page.url()).pathname,
 			};
+    await frameControl?.pause();
 		const { stable, capture: previous } = await captureStableFrames(() => takeSnapshot(page), {
 			wait: (ms) => page.waitForTimeout(ms),
 		});
@@ -317,6 +321,7 @@ export async function capturePage(page, url, { clockTime } = {}) {
 			],
 		};
 	}
+  finally { await frameControl?.close(); }
 }
 
 export async function createFixtureContext(browser, options = {}) {
