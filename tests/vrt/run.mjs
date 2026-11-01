@@ -256,6 +256,10 @@ try {
 	}
 	const rasterArgs = process.env.VRT_DETERMINISTIC_RASTER === "1"
     ? ["--disable-partial-raster", "--run-all-compositor-stages-before-draw", "--disable-gpu-compositing", "--force-color-profile=srgb", "--disable-threaded-animation"] : [];
+  const variant = process.env.VRT_RASTER_VARIANT ?? "software";
+  if (variant.startsWith("default")) rasterArgs.splice(rasterArgs.indexOf("--disable-gpu-compositing"), 1);
+  if (variant.endsWith("scalar")) rasterArgs.push("--disable-skia-runtime-opts");
+  manifest.rasterVariant = variant;
   manifest.rasterArgs = rasterArgs;
   browser = await chromium.launch({ args: ["--enable-unsafe-swiftshader", "--disable-lcd-text", ...rasterArgs] });
 	manifest.browserVersion = browser.version();

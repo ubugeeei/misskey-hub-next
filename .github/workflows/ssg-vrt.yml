@@ -17,8 +17,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        viewport: [desktop, mobile]
+        viewport: [mobile]
         theme: [light, dark]
+        raster: [software, software-scalar, default, default-scalar]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -30,16 +31,17 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: vrt-sites
-          run-id: 41277991930
+          run-id: 41280804687
           github-token: ${{ github.token }}
       - name: Repeat unchanged reference control and optimized comparison
         env:
           CONTROL_VIEWPORT: ${{ matrix.viewport }}
           CONTROL_THEME: ${{ matrix.theme }}
+          VRT_RASTER_VARIANT: ${{ matrix.raster }}
         run: node tests/vrt/raster-control.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: raster-${{ matrix.viewport }}-${{ matrix.theme }}
+          name: raster-${{ matrix.viewport }}-${{ matrix.theme }}-${{ matrix.raster }}
           path: output/playwright/
           retention-days: 7
