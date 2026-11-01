@@ -17,10 +17,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        viewport: [mobile]
+        viewport: [desktop, mobile]
         theme: [light, dark]
         raster: [software]
-        retention: [none, bitmap, readback]
+        retention: [none]
         isolation: [context]
         workers: [1]
     steps:
@@ -50,6 +50,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: jpeg-${{ matrix.theme }}-${{ matrix.retention }}
+          name: local-idle-${{ matrix.viewport }}-${{ matrix.theme }}
           path: output/playwright/
           retention-days: 7

@@ -9,7 +9,7 @@
 		"test:vrt": "node --experimental-strip-types tests/vrt/run.mjs",
 		"test:vrt:baseline": "node --experimental-strip-types tests/vrt/build-main.mjs",
 		"benchmark": "node --experimental-strip-types tests/vrt/measure.mjs",
-		"test": "node --test tests/markdown.test.mjs tests/corpus.test.mjs tests/vrt/pixels.test.mjs tests/ssg-pipeline.test.mjs tests/vrt/coverage.test.mjs tests/vrt/http.test.mjs"
+		"test": "node --test tests/markdown.test.mjs tests/corpus.test.mjs tests/vrt/pixels.test.mjs tests/ssg-pipeline.test.mjs tests/vrt/coverage.test.mjs tests/vrt/http.test.mjs tests/vrt/readiness.test.mjs"
 	},
 	"devDependencies": {
 		"@google/model-viewer": "^4.1.0",

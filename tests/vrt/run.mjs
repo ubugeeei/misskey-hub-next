@@ -73,9 +73,9 @@ const scriptHash = createHash("sha256")
 	.update(await readFile(new URL("./capture.mjs", import.meta.url)))
 	.update(await readFile(new URL("./snapshot.mjs", import.meta.url)))
 	.update(await readFile(new URL("./http.mjs", import.meta.url)))
+	.update(await readFile(new URL("./readiness.mjs", import.meta.url)))
 	.digest("hex");
 const manifest = {
-  jpegRetention: process.env.VRT_JPEG_RETENTION ?? "none",
 	startedAt,
 	sourceFingerprint: sourceBefore,
 	sample,
@@ -107,7 +107,7 @@ const manifest = {
 	locale: benchmark.intlLocale ?? "en-US",
 	timezone: "Asia/Tokyo",
 	policy:
-		"Exact decoded RGBA and dimensions, at least three identical frames spanning 500ms; up to 100 sampled comparisons 100ms apart, with screenshot generation excluded from the observation budget, no masks/tolerance. Offline external network; empty emoji cache; seeded client randomness; frozen MFM/static clocks at absolute reference clock +30 seconds, RAF timestamps fixed to 30000ms and two final frames advanced for deterministic shader phase; CSS finite motion uses its final frame and infinite motion its initial frame. Those authored properties are retained as ordinary CSS before CSS animation is canceled, including scroll-linked and subsequently mounted elements. Every page uses 4096px CDP clips at unchanged document coordinates; all pixels compared, no scrolling or masks. Capture deadline 300s. Browser Intl fallback matches the build; video is decoded and paused at time zero; LCD subpixel text and partial raster are disabled; all compositor stages complete before drawing, software compositing and sRGB are fixed. Initial descendant requests reach network idle before CSS state is frozen.",
+		"Exact decoded RGBA and dimensions, at least three identical frames spanning 500ms; up to 100 sampled comparisons 100ms apart, with screenshot generation excluded from the observation budget, no masks/tolerance. Offline external network; empty emoji cache; seeded client randomness; frozen MFM/static clocks at absolute reference clock +30 seconds, RAF timestamps fixed to 30000ms and two final frames advanced for deterministic shader phase; CSS finite motion uses its final frame and infinite motion its initial frame. Those authored properties are retained as ordinary CSS before CSS animation is canceled, including scroll-linked and subsequently mounted elements. Every page uses 4096px CDP clips at unchanged document coordinates; all pixels compared, no scrolling or masks. Capture deadline 300s. Browser Intl fallback matches the build; video is decoded and paused at time zero; LCD subpixel text and partial raster are disabled; all compositor stages complete before drawing, software compositing and sRGB are fixed. After explicit font/image/video decode, initial local descendant fetch/import requests must complete and remain quiet for 500ms within a 60s readiness deadline. Blocked external requests do not control readiness.",
 };
 const rows = [];
 if (process.argv.includes("--resume")) {
@@ -218,7 +218,6 @@ async function saveSamples(mode, entry, reference, candidate, comparison) {
 	await mkdir(dir, { recursive: true });
 	await writeFile(dir + "/baseline.png", referenceBytes);
 	await writeFile(dir + "/candidate.png", candidateBytes);
-  await writeFile(dir + "/diagnostics.json", JSON.stringify({reference:reference.diagnostics,candidate:candidate.diagnostics},null,2));
 	if (reference.tiles)
 		await writeFile(
 			dir + "/tile.json",
