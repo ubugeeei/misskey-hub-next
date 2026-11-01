@@ -6,7 +6,7 @@ for (let repeat = 1; repeat <= 5; repeat++) {
   const paths = repeat === 1 ? allPaths : allPaths.filter(path => !path.endsWith("/releases/"));
   for (const comparison of ["unchanged-reference", "optimized"]) {
     const output = `output/playwright/${comparison}-${repeat}`;
-    const args = ["tests/vrt/run.mjs", "--workers=2", `--only=${paths.join(",")}`,
+    const args = ["tests/vrt/run.mjs", `--workers=${process.env.CONTROL_WORKERS ?? 2}`, `--only=${paths.join(",")}`,
       "--reference-metadata=.vrt/reference-build.json", "--reference-dir=.vrt/reference/.output/public",
       `--viewport=${process.env.CONTROL_VIEWPORT}`, `--theme=${process.env.CONTROL_THEME}`,
       `--output-dir=${output}`];

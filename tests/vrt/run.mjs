@@ -263,6 +263,7 @@ try {
   if (variant.includes("new-surface")) rasterArgs.push("--enable-features=CDPScreenshotNewSurface");
   manifest.rasterVariant = variant;
   manifest.rasterArgs = rasterArgs;
+  manifest.browserIsolation = process.env.VRT_BROWSER_ISOLATION ?? "context";
   browser = await chromium.launch({ args: ["--enable-unsafe-swiftshader", "--disable-lcd-text", ...rasterArgs] });
 	manifest.browserVersion = browser.version();
 	await writeFile(manifestFile, JSON.stringify(manifest, null, 2) + "\n");
@@ -274,7 +275,8 @@ try {
 			while (cursor < remaining.length) {
 				const entry = remaining[cursor++];
 				const capture = async (mode) => {
-					const context = await createFixtureContext(browser, {
+					const captureBrowser = process.env.VRT_BROWSER_ISOLATION === "capture" ? await chromium.launch({ args: ["--enable-unsafe-swiftshader", "--disable-lcd-text", ...rasterArgs] }) : browser;
+					const context = await createFixtureContext(captureBrowser, {
 						viewport,
 						colorScheme,
 						locale: manifest.locale,
@@ -300,6 +302,7 @@ try {
 					} finally {
 						clearTimeout(timer);
 						await context.close();
+            if (captureBrowser !== browser) await captureBrowser.close();
 					}
 				};
 				const reference = await capture("baseline");

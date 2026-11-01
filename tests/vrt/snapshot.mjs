@@ -14,7 +14,7 @@ export async function takeSnapshot(page) {
 			const { data } = await session.send("Page.captureScreenshot", {
 				format: "png",
 				optimizeForSpeed: true,
-				captureBeyondViewport: !process.env.VRT_RASTER_VARIANT?.includes("no-beyond"),
+				captureBeyondViewport: true,
 				fromSurface: true,
 				clip: { x: 0, y, width, height: tileHeight, scale: 1 },
 			});
