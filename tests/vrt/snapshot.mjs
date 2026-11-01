@@ -8,13 +8,13 @@ export async function takeSnapshot(page) {
 		const width = Math.ceil(cssContentSize.width),
 			height = Math.ceil(cssContentSize.height),
 			tiles = [];
-		const tileSize = process.env.VRT_RASTER_VARIANT?.includes("fullclip") ? 16384 : 4096;
+		const tileSize = 4096;
 		for (let y = 0; y < height; y += tileSize) {
 			const tileHeight = Math.min(tileSize, height - y);
 			const { data } = await session.send("Page.captureScreenshot", {
 				format: "png",
 				optimizeForSpeed: true,
-				captureBeyondViewport: true,
+				captureBeyondViewport: !process.env.VRT_RASTER_VARIANT?.includes("no-beyond"),
 				fromSurface: true,
 				clip: { x: 0, y, width, height: tileHeight, scale: 1 },
 			});

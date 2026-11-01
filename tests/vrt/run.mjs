@@ -260,6 +260,7 @@ try {
   if (variant.startsWith("default")) rasterArgs.splice(rasterArgs.indexOf("--disable-gpu-compositing"), 1);
   if (variant.endsWith("scalar")) rasterArgs.push("--disable-skia-runtime-opts");
   if (variant.includes("serial")) rasterArgs.push("--disable-checker-imaging", "--num-raster-threads=1");
+  if (variant.includes("new-surface")) rasterArgs.push("--enable-features=CDPScreenshotNewSurface");
   manifest.rasterVariant = variant;
   manifest.rasterArgs = rasterArgs;
   browser = await chromium.launch({ args: ["--enable-unsafe-swiftshader", "--disable-lcd-text", ...rasterArgs] });

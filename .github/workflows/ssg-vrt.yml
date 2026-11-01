@@ -19,7 +19,7 @@ jobs:
       matrix:
         viewport: [mobile]
         theme: [light, dark]
-        raster: [software, software-serial, software-fullclip, software-serial-fullclip]
+        raster: [software, software-no-beyond, software-new-surface, software-no-beyond-new-surface]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -38,7 +38,9 @@ jobs:
           CONTROL_VIEWPORT: ${{ matrix.viewport }}
           CONTROL_THEME: ${{ matrix.theme }}
           VRT_RASTER_VARIANT: ${{ matrix.raster }}
-        run: node tests/vrt/raster-control.mjs
+        run: |
+          node tests/vrt/clip-control.mjs
+          node tests/vrt/raster-control.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
