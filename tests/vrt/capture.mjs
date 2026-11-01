@@ -203,7 +203,18 @@ export async function capturePage(page, url, { clockTime } = {}) {
 				status: "unstable",
 				errors: ["No two consecutive identical frames within 5 seconds"],
 			};
+		const diagnostics = await page.evaluate(() => ({
+      html: document.documentElement.outerHTML.replaceAll(location.origin, "ORIGIN"),
+      elements: [...document.querySelectorAll("body *")].flatMap((node, index) => {
+        const style = getComputedStyle(node);
+        if (!parseFloat(style.borderTopLeftRadius) && !["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(node.tagName)) return [];
+        const rect = node.getBoundingClientRect();
+        const names = ["border-top-left-radius", "border-top-width", "border-top-color", "background-color", "opacity", "transform", "filter", "backdrop-filter", "box-shadow", "clip-path", "will-change", "color", "font-family", "font-size", "line-height"];
+        return [{ index, tag: node.tagName, class: node.className, rect: rect.toJSON(), style: Object.fromEntries(names.map(name => [name, style.getPropertyValue(name)])) }];
+      }),
+    }));
 		return {
+      diagnostics,
 			status: errors.length ? "runtime-error" : "captured",
 			errors,
 			...previous,
