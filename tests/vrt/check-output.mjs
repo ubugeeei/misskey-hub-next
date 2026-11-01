@@ -21,6 +21,7 @@ const [referenceHtml, candidateHtml] = await Promise.all([
 	htmlFiles(candidate),
 ]);
 assert.deepEqual(candidateHtml, referenceHtml, "Published HTML file set changed");
+const differences = [];
 for (const file of referenceHtml) {
 	const [left, right] = await Promise.all([
 		readFile(resolve(reference, file), "utf8"),
@@ -28,7 +29,12 @@ for (const file of referenceHtml) {
 	]);
 	// Only the actual entry script may differ. CSS URLs, text, attributes, inline
 	// data, redirect targets and all other bytes remain part of the comparison.
-	assert.ok(left.replaceAll(referenceScript, candidateScript) === right, `HTML differs: ${file}`);
+  const normalized = left.replaceAll(referenceScript, candidateScript);
+  if (normalized !== right) {
+    let offset = 0;
+    while (offset < Math.min(normalized.length, right.length) && normalized[offset] === right[offset]) offset++;
+    differences.push({file, offset, reference:normalized.slice(Math.max(0,offset-100),offset+250),candidate:right.slice(Math.max(0,offset-100),offset+250)});
+  }
 }
 let publicFiles = 0;
 for (const file of await readdir("public", { recursive: true })) {
@@ -41,11 +47,14 @@ for (const file of await readdir("public", { recursive: true })) {
 	publicFiles++;
 }
 const receipt = {
+  differences,
 	htmlFiles: referenceHtml.length,
 	publicFiles,
 	actualReferenceEntry: before[entry].file,
 	actualCandidateEntry: after[entry].file,
 	policy: "Exact HTML except the actual client entry script URL; exact public asset bytes",
 };
-console.log(JSON.stringify(receipt));
+console.log(JSON.stringify({...receipt,differences:differences.slice(0,10)}));
 await writeFile(".vrt/output-parity.json", JSON.stringify(receipt, null, 2) + "\n");
+
+assert.equal(differences.length, 0, "HTML differs beyond the actual client entry script");

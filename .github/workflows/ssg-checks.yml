@@ -63,6 +63,7 @@ jobs:
           await writeFile(".vrt/candidate-source-fingerprint.txt", await sourceFingerprint());
           JS
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: vrt-sites
           path: |
