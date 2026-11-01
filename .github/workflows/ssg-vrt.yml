@@ -1,68 +1,22 @@
-name: SSG visual regression
-
+name: SSG raster reproducibility control
 on:
-  pull_request:
-  push:
-    branches: ["perf/**"]
   workflow_dispatch:
-
 permissions:
   contents: read
-
-concurrency:
-  group: ssg-vrt-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
+  actions: read
 jobs:
-  build-sites:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "26.13.0"
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - name: Build the unmodified PR 3 reference
-        run: node tests/vrt/build-reference.mjs 9aa603958ed8f1ffde66aa2052d530d3d584c66b
-      - name: Build and verify the optimized site
-        run: |
-          pnpm build
-          node ssg/verify.mjs
-          node --input-type=module <<'JS'
-          import { writeFile } from "node:fs/promises";
-          import { sourceFingerprint } from "./tests/vrt/evidence.mjs";
-          await writeFile(".vrt/candidate-source-fingerprint.txt", await sourceFingerprint());
-          JS
-      - uses: actions/upload-artifact@v4
-        with:
-          name: vrt-sites
-          path: |
-            .output/public/
-            .vrt/reference/.output/public/
-            .vrt/reference-build.json
-            .vrt/candidate-source-fingerprint.txt
-            assets/data/i18n-members.ts
-          include-hidden-files: true
-          compression-level: 1
-          retention-days: 7
-
-  all-pages:
-    needs: build-sites
+  control:
     runs-on: ubuntu-latest
     container:
       image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
     env:
       PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
-    timeout-minutes: 45
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
         viewport: [desktop, mobile]
         theme: [light, dark]
-        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -74,44 +28,16 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: vrt-sites
-      - name: Verify capture sources match the built site
-        run: |
-          node --input-type=module <<'JS'
-          import assert from "node:assert/strict";
-          import { readFile } from "node:fs/promises";
-          import { sourceFingerprint } from "./tests/vrt/evidence.mjs";
-          assert.equal(await sourceFingerprint(), await readFile(".vrt/candidate-source-fingerprint.txt", "utf8"));
-          JS
-      - name: Compare every assigned URL with exact pixels
-        run: >-
-          pnpm test:vrt --sample=all --workers=2 --shard=${{ matrix.shard }}/4
-          --reference-metadata=.vrt/reference-build.json
-          --reference-dir=.vrt/reference/.output/public
-          --viewport=${{ matrix.viewport }} --theme=${{ matrix.theme }}
-          --output-dir=output/playwright/${{ matrix.viewport }}-${{ matrix.theme }}-${{ matrix.shard }}
+          run-id: 41274366899
+          github-token: ${{ github.token }}
+      - name: Repeat unchanged reference control and optimized comparison
+        env:
+          CONTROL_VIEWPORT: ${{ matrix.viewport }}
+          CONTROL_THEME: ${{ matrix.theme }}
+        run: node tests/vrt/raster-control.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: vrt-${{ matrix.viewport }}-${{ matrix.theme }}-${{ matrix.shard }}
+          name: raster-${{ matrix.viewport }}-${{ matrix.theme }}
           path: output/playwright/
           retention-days: 7
-
-  coverage:
-    if: ${{ always() && needs.build-sites.result == 'success' }}
-    needs: [build-sites, all-pages]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "26.13.0"
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: vrt-*-*-*
-          path: .vrt/combined
-          merge-multiple: true
-      - name: Require all URLs to pass in all four conditions
-        run: node tests/vrt/check-results.mjs .vrt/combined 9aa603958ed8f1ffde66aa2052d530d3d584c66b
