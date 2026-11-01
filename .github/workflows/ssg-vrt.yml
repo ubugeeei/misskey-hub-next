@@ -1,24 +1,16 @@
-name: SSG raster reproducibility control
+name: SSG screenshot viewport contract probe
 on:
   workflow_dispatch:
 permissions:
   contents: read
-  actions: read
 jobs:
-  control:
+  probe:
     runs-on: ubuntu-latest
     container:
       image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
     env:
       PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
-      VRT_DETERMINISTIC_RASTER: "1"
-      VRT_FORCE_TILES: "1"
-    timeout-minutes: 45
-    strategy:
-      fail-fast: false
-      matrix:
-        theme: [light, dark]
-        browser: [shell-software, chromium-software, chromium-default]
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -27,27 +19,10 @@ jobs:
           node-version: "26.13.0"
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
-      - uses: actions/download-artifact@v4
-        with:
-          name: vrt-sites
-          run-id: 41285234902
-          github-token: ${{ github.token }}
-      - name: Repeat unchanged reference control and optimized comparison
-        env:
-          CONTROL_VIEWPORT: mobile
-          CONTROL_THEME: ${{ matrix.theme }}
-          VRT_RASTER_VARIANT: software
-          VRT_BROWSER_ISOLATION: context
-          CONTROL_WORKERS: "1"
-          VRT_JPEG_RETENTION: none
-          VRT_BROWSER_CHANNEL: ${{ startsWith(matrix.browser, 'chromium') && 'chromium' || 'shell' }}
-          VRT_SOFTWARE_COMPOSITING: ${{ endsWith(matrix.browser, 'default') && '0' || '1' }}
-        run: |
-          node .vrt-control/clip-control.mjs
-          node .vrt-control/raster-control.mjs
+      - run: node .vrt-control/viewport-probe.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: browser-${{ matrix.theme }}-${{ matrix.browser }}
+          name: viewport-contract
           path: output/playwright/
           retention-days: 7
