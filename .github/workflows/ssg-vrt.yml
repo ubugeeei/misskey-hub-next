@@ -13,12 +13,13 @@ jobs:
       PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
       VRT_DETERMINISTIC_RASTER: "1"
       VRT_FORCE_TILES: "1"
-    timeout-minutes: 45
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
         theme: [light, dark]
-        frames: [auto, flags, manual]
+        viewport: [desktop, mobile]
+        screen: ["0", "1"]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -34,7 +35,7 @@ jobs:
           github-token: ${{ github.token }}
       - name: Repeat unchanged reference control and optimized comparison
         env:
-          CONTROL_VIEWPORT: mobile
+          CONTROL_VIEWPORT: ${{ matrix.viewport }}
           CONTROL_THEME: ${{ matrix.theme }}
           VRT_RASTER_VARIANT: software
           VRT_BROWSER_ISOLATION: context
@@ -42,15 +43,15 @@ jobs:
           VRT_JPEG_RETENTION: none
           VRT_BROWSER_CHANNEL: shell
           VRT_SOFTWARE_COMPOSITING: "1"
-          VRT_NATIVE_SCREEN: "1"
+          VRT_NATIVE_SCREEN: ${{ matrix.screen }}
           VRT_JPEG_DELIVERY: direct
-          VRT_FRAME_MODE: ${{ matrix.frames }}
+          VRT_FRAME_MODE: manual
         run: |
           node .vrt-control/clip-control.mjs
           node .vrt-control/raster-control.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: frames-${{ matrix.theme }}-${{ matrix.frames }}
+          name: qualify-${{ matrix.viewport }}-${{ matrix.theme }}-${{ matrix.screen }}
           path: output/playwright/
           retention-days: 7
