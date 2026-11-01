@@ -1,37 +1,78 @@
-name: SSG checks
-
+name: SSG same-path output parity control
 on:
-  pull_request:
-  push:
-    branches: ["perf/**"]
-
+  workflow_dispatch:
 permissions:
   contents: read
-
-concurrency:
-  group: ssg-checks-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
-  build:
+  build-sites:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        node: ["22.22.3", "26.13.0"]
     steps:
+      # Auto-imported absolute paths participate in Vue's scope hashes. Build
+      # both revisions at this same path, preserving only the frozen reference.
       - uses: actions/checkout@v4
+        with:
+          ref: 9aa603958ed8f1ffde66aa2052d530d3d584c66b
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node }}
+          node-version: "26.13.0"
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm test
-      - name: Generate the complete site
-        run: /usr/bin/time -p pnpm build
-        env:
-          NODE_ENV: production
-      - name: Verify every published page, fallback and public asset
-        run: node --experimental-strip-types ssg/verify.mjs
+      - name: Build the unmodified PR 3 reference
+        run: |
+          node --input-type=module <<'JS'
+          import assert from "node:assert/strict";
+          import { execFileSync } from "node:child_process";
+          import { cp, mkdir, stat, writeFile } from "node:fs/promises";
+          import { resolve } from "node:path";
+          const commit = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+          assert.equal(commit, "9aa603958ed8f1ffde66aa2052d530d3d584c66b");
+          const startedAt = new Date().toISOString(), started = performance.now();
+          execFileSync("pnpm", ["build"], { stdio: "inherit", env: { ...process.env, NODE_ENV: "production", TZ: "Asia/Tokyo" } });
+          const seconds = (performance.now() - started) / 1000;
+          const { loadPages } = await import("./ssg/routes.mjs");
+          const pages = await loadPages();
+          for (const page of pages) assert.ok((await stat(".output/public" + page.path + "index.html")).size > 0, page.path);
+          assert.ok((await stat(".output/public/404.html")).size > 0);
+          const { sourceFingerprint } = await import("./tests/vrt/evidence.mjs");
+          const receipt = {
+            commit, baselineDirectory: resolve(".vrt/reference"), sourceFingerprint: await sourceFingerprint(),
+            node: process.version, intlLocale: Intl.DateTimeFormat().resolvedOptions().locale,
+            publicUrls: pages.length, startedAt, finishedAt: new Date().toISOString(), seconds,
+            policy: "One unmodified full PNPM production build at the same checkout path as the candidate. Installation, output checks and freezing the reference are outside the timer."
+          };
+          await mkdir(".vrt", { recursive: true });
+          await writeFile(".vrt/reference-build.json", JSON.stringify(receipt, null, 2) + "\n");
+          await cp(".output/public", ".vrt/reference/.output/public", { recursive: true });
+          console.log(receipt);
+          JS
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          clean: false
+      - run: pnpm install --frozen-lockfile
+      - name: Build and verify the optimized site
+        run: |
+          pnpm build
+          node ssg/verify.mjs
+          node tests/vrt/check-output.mjs .vrt/reference/.output/public .output/public
+          node --input-type=module <<'JS'
+          import { writeFile } from "node:fs/promises";
+          import { sourceFingerprint } from "./tests/vrt/evidence.mjs";
+          await writeFile(".vrt/candidate-source-fingerprint.txt", await sourceFingerprint());
+          JS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vrt-sites
+          path: |
+            .output/public/
+            .vrt/reference/.output/public/
+            .vrt/reference-build.json
+            .vrt/output-parity.json
+            .vrt/candidate-source-fingerprint.txt
+            assets/data/i18n-members.ts
+          include-hidden-files: true
+          compression-level: 1
+          retention-days: 7
+
