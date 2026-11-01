@@ -30,7 +30,7 @@ jobs:
       - name: Match the upgraded SDK to its pinned image
         if: matrix.sdk == 'upgraded'
         run: |
-          git fetch --depth=1 origin 172772b
+          git fetch --depth=1 origin 172772b5e25e8d1e56e269f500a35cde64449ff7
           git show FETCH_HEAD:package.json > package.json
           git show FETCH_HEAD:pnpm-lock.yaml > pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile --ignore-scripts
