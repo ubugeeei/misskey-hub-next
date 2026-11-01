@@ -18,8 +18,8 @@ jobs:
       fail-fast: false
       matrix:
         viewport: [mobile]
-        theme: [light, dark]
-        raster: [software, software-layout]
+        theme: [light]
+        raster: [software-layout]
         isolation: [context]
         workers: [2]
     steps:

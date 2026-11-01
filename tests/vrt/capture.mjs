@@ -248,7 +248,11 @@ export async function capturePage(page, url, { clockTime } = {}) {
         void body.offsetHeight;
         if (style === null) body.removeAttribute("style"); else body.setAttribute("style", style);
         void body.offsetHeight;
-        if (body.outerHTML !== before) throw Error("Layout rebuild changed DOM");
+        const after = body.outerHTML;
+        if (after !== before) {
+          let index = 0; while (index < Math.min(before.length,after.length) && before[index] === after[index]) index++;
+          throw Error("Layout rebuild changed DOM: " + JSON.stringify({index, before:before.slice(Math.max(0,index-100),index+200), after:after.slice(Math.max(0,index-100),index+200), originalStyle:style, finalStyle:body.getAttribute("style")}));
+        }
       });
       await page.waitForTimeout(200);
     }
