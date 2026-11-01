@@ -2,7 +2,7 @@ import { chromium } from "@playwright/test";
 import { PNG } from "pngjs";
 import assert from "node:assert/strict";
 import { takeSnapshot } from "./snapshot.mjs";
-const browser = await chromium.launch();
+const browser = await chromium.launch({args:["--enable-gpu-benchmarking"]});
 try {
  const page = await browser.newPage({viewport:{width:390,height:844}});
  const colors = [[255,0,0],[0,255,0],[0,0,255],[255,255,0],[255,0,255]];

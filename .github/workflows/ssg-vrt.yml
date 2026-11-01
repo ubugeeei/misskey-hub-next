@@ -19,9 +19,9 @@ jobs:
       matrix:
         viewport: [mobile]
         theme: [light, dark]
-        raster: [software]
-        isolation: [context, capture]
-        workers: [1, 2]
+        raster: [software-repaint, angle]
+        isolation: [context]
+        workers: [2]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -48,6 +48,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: isolation-${{ matrix.theme }}-${{ matrix.isolation }}-${{ matrix.workers }}
+          name: redraw-${{ matrix.theme }}-${{ matrix.raster }}
           path: output/playwright/
           retention-days: 7

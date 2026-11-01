@@ -261,6 +261,8 @@ try {
   if (variant.endsWith("scalar")) rasterArgs.push("--disable-skia-runtime-opts");
   if (variant.includes("serial")) rasterArgs.push("--disable-checker-imaging", "--num-raster-threads=1");
   if (variant.includes("new-surface")) rasterArgs.push("--enable-features=CDPScreenshotNewSurface");
+  if (variant.includes("repaint")) rasterArgs.push("--enable-gpu-benchmarking");
+  if (variant === "angle") { rasterArgs.splice(rasterArgs.indexOf("--disable-gpu-compositing"), 1); rasterArgs.push("--use-gl=angle", "--use-angle=swiftshader", "--enable-gpu-rasterization"); }
   manifest.rasterVariant = variant;
   manifest.rasterArgs = rasterArgs;
   manifest.browserIsolation = process.env.VRT_BROWSER_ISOLATION ?? "context";

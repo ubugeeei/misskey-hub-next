@@ -11,6 +11,10 @@ export async function takeSnapshot(page) {
 		const tileSize = 4096;
 		for (let y = 0; y < height; y += tileSize) {
 			const tileHeight = Math.min(tileSize, height - y);
+			if (process.env.VRT_RASTER_VARIANT?.includes("repaint")) {
+        await page.evaluate(() => chrome.gpuBenchmarking.setNeedsDisplayOnAllLayers());
+        await page.waitForTimeout(50);
+      }
 			const { data } = await session.send("Page.captureScreenshot", {
 				format: "png",
 				optimizeForSpeed: true,
