@@ -3,7 +3,7 @@
 // document coordinates (including fixed elements) while bounding decode memory.
 export async function takeSnapshot(page) {
 	const height = await page.evaluate(() => document.documentElement.scrollHeight);
-	if (height <= 16000)
+	if (height <= 16000 && process.env.VRT_FORCE_TILES !== "1")
 		return {
 			bytes: await page.screenshot({ fullPage: true, animations: "allow", timeout: 30000 }),
 		};
