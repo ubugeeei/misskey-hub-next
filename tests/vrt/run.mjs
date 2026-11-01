@@ -253,7 +253,10 @@ try {
 		servers.push(server);
 		origins[mode] = `http://127.0.0.1:${server.address().port}`;
 	}
-	browser = await chromium.launch({ args: ["--enable-unsafe-swiftshader", "--disable-lcd-text"] });
+	const rasterArgs = process.env.VRT_CPU_RASTER === "1"
+    ? ["--disable-gpu-rasterization", "--disable-skia-runtime-opts"] : [];
+  manifest.rasterArgs = rasterArgs;
+  browser = await chromium.launch({ args: ["--enable-unsafe-swiftshader", "--disable-lcd-text", ...rasterArgs] });
 	manifest.browserVersion = browser.version();
 	await writeFile(manifestFile, JSON.stringify(manifest, null, 2) + "\n");
 	console.log(

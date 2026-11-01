@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
 const paths = [
+  "/ja/", "/fr/", "/id/", "/tw/",
   "/cn/tools/share-link-generator/", "/id/tools/identicon-generator/",
   "/it/tools/mfm-playground/", "/tools/custom-emoji-preview/",
   "/ja/blog/2021-09-11-hello-to-misskey-hub/", "/blog/2023-02-13-media-k-tai/",
