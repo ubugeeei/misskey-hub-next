@@ -96,6 +96,9 @@ export async function captureStableFrames(capture, { wait, now = () => performan
 export async function capturePage(page, url, { clockTime } = {}) {
 	const clock = /\/features\/mfm\//.test(url) || !/\/(docs|blog)\//.test(url);
 	const errors = [];
+  let decodedImages;
+  const retention = process.env.VRT_JPEG_RETENTION ?? "none";
+  let decodedMetadata = [];
 	const pendingLocalRequests = new Set();
 	page.on("request", (request) => {
 		if (new URL(request.url()).hostname === "127.0.0.1") pendingLocalRequests.add(request);
@@ -277,6 +280,28 @@ export async function capturePage(page, url, { clockTime } = {}) {
 				errors,
 				finalPath: new URL(page.url()).pathname,
 			};
+    if (retention !== "none") {
+      decodedImages = await page.evaluateHandle(async mode => {
+        const results = [];
+        for (const img of document.images) {
+          if (!img.currentSrc || !img.naturalWidth || !img.naturalHeight) continue;
+          const url = new URL(img.currentSrc);
+          if (url.origin !== location.origin || !/\.jpe?g$/i.test(url.pathname)) continue;
+          const bitmap = await createImageBitmap(img);
+          let canvas, rgba;
+          if (mode === "readback") {
+            canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+            const context = canvas.getContext("2d", {willReadFrequently:true});
+            context.drawImage(bitmap,0,0);
+            const pixels = context.getImageData(0,0,bitmap.width,bitmap.height).data;
+            rgba = [...new Uint8Array(await crypto.subtle.digest("SHA-256",pixels))].map(x=>x.toString(16).padStart(2,"0")).join("");
+          }
+          results.push({bitmap,canvas,metadata:{path:url.pathname,width:bitmap.width,height:bitmap.height,rgba}});
+        }
+        return results;
+      }, retention);
+      decodedMetadata = await decodedImages.evaluate(items => items.map(item=>item.metadata));
+    }
 		const { stable, capture: previous } = await captureStableFrames(() => takeSnapshot(page), {
 			wait: (ms) => page.waitForTimeout(ms),
 		});
@@ -291,6 +316,7 @@ export async function capturePage(page, url, { clockTime } = {}) {
 			status: errors.length ? "runtime-error" : "captured",
 			errors,
 			...previous,
+      diagnostics: {retention,decodedMetadata},
 			finalPath: new URL(page.url()).pathname,
 		};
 	} catch (error) {
@@ -305,6 +331,7 @@ export async function capturePage(page, url, { clockTime } = {}) {
 			],
 		};
 	}
+  finally { if (decodedImages) await decodedImages.dispose().catch(() => {}); }
 }
 
 export async function createFixtureContext(browser, options = {}) {

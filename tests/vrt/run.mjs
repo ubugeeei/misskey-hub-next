@@ -75,6 +75,7 @@ const scriptHash = createHash("sha256")
 	.update(await readFile(new URL("./http.mjs", import.meta.url)))
 	.digest("hex");
 const manifest = {
+  jpegRetention: process.env.VRT_JPEG_RETENTION ?? "none",
 	startedAt,
 	sourceFingerprint: sourceBefore,
 	sample,
@@ -217,6 +218,7 @@ async function saveSamples(mode, entry, reference, candidate, comparison) {
 	await mkdir(dir, { recursive: true });
 	await writeFile(dir + "/baseline.png", referenceBytes);
 	await writeFile(dir + "/candidate.png", candidateBytes);
+  await writeFile(dir + "/diagnostics.json", JSON.stringify({reference:reference.diagnostics,candidate:candidate.diagnostics},null,2));
 	if (reference.tiles)
 		await writeFile(
 			dir + "/tile.json",

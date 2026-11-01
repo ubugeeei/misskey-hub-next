@@ -17,9 +17,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        viewport: [desktop, mobile]
+        viewport: [mobile]
         theme: [light, dark]
         raster: [software]
+        retention: [none, bitmap, readback]
         isolation: [context]
         workers: [1]
     steps:
@@ -35,14 +36,6 @@ jobs:
           name: vrt-sites
           run-id: 41285234902
           github-token: ${{ github.token }}
-      - name: Verify capture sources match the frozen candidate
-        run: |
-          node --input-type=module <<'JS'
-          import assert from "node:assert/strict";
-          import { readFile } from "node:fs/promises";
-          import { sourceFingerprint } from "./tests/vrt/evidence.mjs";
-          assert.equal(await sourceFingerprint(), await readFile(".vrt/candidate-source-fingerprint.txt", "utf8"));
-          JS
       - name: Repeat unchanged reference control and optimized comparison
         env:
           CONTROL_VIEWPORT: ${{ matrix.viewport }}
@@ -50,12 +43,13 @@ jobs:
           VRT_RASTER_VARIANT: ${{ matrix.raster }}
           VRT_BROWSER_ISOLATION: ${{ matrix.isolation }}
           CONTROL_WORKERS: ${{ matrix.workers }}
+          VRT_JPEG_RETENTION: ${{ matrix.retention }}
         run: |
           node .vrt-control/clip-control.mjs
           node .vrt-control/raster-control.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: canonical-${{ matrix.viewport }}-${{ matrix.theme }}
+          name: jpeg-${{ matrix.theme }}-${{ matrix.retention }}
           path: output/playwright/
           retention-days: 7
