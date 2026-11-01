@@ -21,6 +21,7 @@ try {
    }
    row.afterSetup=await metrics(page);
    const {data}=await session.send("Page.captureScreenshot",{format:"png",optimizeForSpeed:true,captureBeyondViewport:method==="baseline",fromSurface:true,clip:{x:0,y:0,width:390,height:10000,scale:1}});
+   await page.waitForTimeout(100);
    row.afterCapture=await metrics(page);
    const png=PNG.sync.read(Buffer.from(data,"base64"));row.dimensions=[png.width,png.height];
    if(png.width!==390||png.height!==10000)throw Error("Wrong image dimensions");
