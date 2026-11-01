@@ -154,6 +154,19 @@ export async function capturePage(page, url, { clockTime } = {}) {
 		// pausing time. Freezing the application clock too early races scrollspy.
 		// Use an absolute clock for deterministic WebGL shader timestamps as well.
 		await page.waitForTimeout(200);
+		// Use one authored final CSS frame for current and subsequently mounted
+    // elements. Inline commitStyles snapshots can be discarded by Vue updates.
+    await page.addStyleTag({ content: `
+      *, *::before, *::after {
+        animation-timeline: auto !important;
+        animation-duration: 0.001s !important;
+        animation-delay: -0.001s !important;
+        animation-iteration-count: 1 !important;
+        animation-fill-mode: both !important;
+        animation-play-state: paused !important;
+        transition: none !important;
+      }
+    ` });
 		if (clock) {
 			await page.clock.pauseAt(new Date(clockTime).getTime() + 29_968);
 			// Run two frames with identical RAF timestamps. Pausing Date alone can
@@ -161,29 +174,7 @@ export async function capturePage(page, url, { clockTime } = {}) {
 			await page.clock.runFor(32);
 		}
 		await page.mouse.move(0, 0);
-		await page.evaluate(() => {
-			window.scrollTo({ top: 0, behavior: "instant" });
-			const animations = document.getAnimations();
-			for (const animation of animations) {
-				if (animation.effect?.getTiming().iterations === Infinity) {
-					animation.pause();
-					animation.currentTime = 0;
-				} else {
-					try {
-						animation.finish();
-					} catch {}
-				}
-			}
-			for (const animation of animations) {
-				try {
-					animation.commitStyles();
-				} catch {}
-			}
-		});
-		await page.addStyleTag({
-			content:
-				"*, *::before, *::after { animation: none !important; transition: none !important; }",
-		});
+		await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
 		if (errors.length)
 			return {
 				status: "runtime-error",
