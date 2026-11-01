@@ -263,7 +263,7 @@ export async function capturePage(page, url, { clockTime } = {}) {
 			finalPath: new URL(page.url()).pathname,
 		};
 	} catch (error) {
-		return { status: "capture-error", errors: [error.message, ...errors] };
+		return { status: "capture-error", errors: [error.message, ...errors, ...[...pendingLocalRequests].map(request => `Pending ${request.resourceType()} ${request.url()}`)] };
 	}
 }
 

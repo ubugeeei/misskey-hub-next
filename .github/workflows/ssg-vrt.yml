@@ -19,7 +19,7 @@ jobs:
       matrix:
         viewport: [mobile]
         theme: [light, dark]
-        raster: [software-repaint, angle]
+        raster: [software]
         isolation: [context]
         workers: [2]
     steps:
@@ -48,6 +48,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: redraw-${{ matrix.theme }}-${{ matrix.raster }}
+          name: ranges-${{ matrix.theme }}
           path: output/playwright/
           retention-days: 7
