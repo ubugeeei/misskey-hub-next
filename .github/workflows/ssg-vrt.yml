@@ -17,11 +17,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        viewport: [mobile]
+        viewport: [desktop, mobile]
         theme: [light, dark]
         raster: [software]
         isolation: [context]
-        workers: [2]
+        workers: [1]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -48,6 +48,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ranges-${{ matrix.theme }}
+          name: serial-${{ matrix.viewport }}-${{ matrix.theme }}
           path: output/playwright/
           retention-days: 7

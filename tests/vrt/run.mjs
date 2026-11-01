@@ -240,22 +240,11 @@ try {
 				if (file !== root && !file.startsWith(root + sep)) throw new Error("Invalid path");
 				if ((await stat(file)).isDirectory()) file = resolve(file, "index.html");
 				const bytes = await readFile(file);
-				const headers = {
+				res.writeHead(200, {
 					"Content-Type": mime[extname(file)] ?? "application/octet-stream",
 					"Cache-Control": extname(file) === ".html" ? "no-cache" : "public,max-age=3600",
-            "Content-Length": bytes.length,
-            "Accept-Ranges": "bytes",
-				};
-				if (req.headers.range) {
-            const match = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range);
-            let start = match?.[1] ? Number(match[1]) : 0;
-            let end = match?.[2] ? Number(match[2]) : bytes.length - 1;
-            if (match && !match[1] && match[2]) { start = Math.max(0, bytes.length - Number(match[2])); end = bytes.length - 1; }
-            end = Math.min(end, bytes.length - 1);
-            if (!match || start >= bytes.length || start > end) { res.writeHead(416, {"Content-Range": `bytes */${bytes.length}`, "Content-Length": 0}); res.end(); return; }
-            res.writeHead(206, {...headers, "Content-Range": `bytes ${start}-${end}/${bytes.length}`, "Content-Length": end-start+1});
-            res.end(bytes.subarray(start,end+1));
-          } else { res.writeHead(200, headers); res.end(bytes); }
+				});
+				res.end(bytes);
 			} catch {
 				res.writeHead(404);
 				res.end("Not found");
