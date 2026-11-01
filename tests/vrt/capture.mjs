@@ -241,17 +241,18 @@ export async function capturePage(page, url, { clockTime } = {}) {
 			};
     if (process.env.VRT_RASTER_VARIANT?.includes("layout")) {
       await page.evaluate(() => {
-        const body = document.body;
-        const before = body.outerHTML;
-        const style = body.getAttribute("style");
-        body.style.setProperty("display", "none", "important");
-        void body.offsetHeight;
-        if (style === null) body.removeAttribute("style"); else body.setAttribute("style", style);
-        void body.offsetHeight;
-        const after = body.outerHTML;
+        const before = document.documentElement.outerHTML;
+        const rule = document.createElement("style");
+        rule.textContent = "body { display: none !important; }";
+        document.head.appendChild(rule);
+        if (getComputedStyle(document.body).display !== "none") throw Error("Layout reset did not apply");
+        void document.body.offsetHeight;
+        rule.remove();
+        void document.body.offsetHeight;
+        const after = document.documentElement.outerHTML;
         if (after !== before) {
           let index = 0; while (index < Math.min(before.length,after.length) && before[index] === after[index]) index++;
-          throw Error("Layout rebuild changed DOM: " + JSON.stringify({index, before:before.slice(Math.max(0,index-100),index+200), after:after.slice(Math.max(0,index-100),index+200), originalStyle:style, finalStyle:body.getAttribute("style")}));
+          throw Error("Layout rebuild changed DOM: " + JSON.stringify({index, before:before.slice(Math.max(0,index-100),index+200), after:after.slice(Math.max(0,index-100),index+200)}));
         }
       });
       await page.waitForTimeout(200);
