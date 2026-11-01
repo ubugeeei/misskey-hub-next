@@ -17,9 +17,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        viewport: [desktop, mobile]
+        viewport: [mobile]
         theme: [light, dark]
         screen: [native, viewport]
+        delivery: [direct, buffer]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -44,12 +45,13 @@ jobs:
           VRT_BROWSER_CHANNEL: shell
           VRT_SOFTWARE_COMPOSITING: "1"
           VRT_NATIVE_SCREEN: ${{ matrix.screen == 'native' && '1' || '0' }}
+          VRT_JPEG_DELIVERY: ${{ matrix.delivery }}
         run: |
           node .vrt-control/clip-control.mjs
           node .vrt-control/raster-control.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: screen-${{ matrix.viewport }}-${{ matrix.theme }}-${{ matrix.screen }}
+          name: delivery-${{ matrix.theme }}-${{ matrix.screen }}-${{ matrix.delivery }}
           path: output/playwright/
           retention-days: 7

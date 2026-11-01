@@ -329,9 +329,16 @@ export async function createFixtureContext(browser, options = {}) {
 		reducedMotion: "reduce",
 		serviceWorkers: "block",
 	});
-	await context.route("**/*", (route) =>
-		new URL(route.request().url()).hostname === "127.0.0.1" ? route.continue() : route.abort(),
-	);
+  await context.route("**/*", async route => {
+    const url = new URL(route.request().url());
+    if (url.hostname !== "127.0.0.1") return route.abort();
+    if (process.env.VRT_JPEG_DELIVERY === "buffer" && /\.jpe?g$/i.test(url.pathname)) {
+      const response = await route.fetch();
+      const body = await response.body();
+      return route.fulfill({response, body});
+    }
+    return route.continue();
+  });
 	await context.addInitScript((colorScheme) => {
 		if (window !== window.top) return;
 		localStorage.setItem("miHub_io_emoji", JSON.stringify({ emojis: [] }));
