@@ -13,15 +13,15 @@ jobs:
       PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
       VRT_DETERMINISTIC_RASTER: "1"
       VRT_FORCE_TILES: "1"
-    timeout-minutes: 30
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
-        viewport: [mobile]
+        viewport: [desktop, mobile]
         theme: [light, dark]
-        raster: [software, software-layout]
+        raster: [software]
         isolation: [context]
-        workers: [2]
+        workers: [1]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -33,7 +33,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: vrt-sites
-          run-id: 41280804687
+          run-id: 41285234902
           github-token: ${{ github.token }}
       - name: Repeat unchanged reference control and optimized comparison
         env:
@@ -48,6 +48,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: layout-${{ matrix.theme }}-${{ matrix.raster }}
+          name: canonical-${{ matrix.viewport }}-${{ matrix.theme }}
           path: output/playwright/
           retention-days: 7

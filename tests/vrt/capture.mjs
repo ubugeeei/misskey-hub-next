@@ -72,20 +72,25 @@ export function comparePixels(reference, candidate) {
 }
 
 export async function captureStableFrames(capture, { wait, now = () => performance.now() }) {
-  let previous = await capture();
-  let stableSince = now(), stableFrames = 0, comparisons = 0;
-  do {
-    await wait(100);
-    const current = await capture();
-    comparisons++;
-    if (compareCaptures(previous, current).equal) stableFrames++;
-    else { stableSince = now(); stableFrames = 0; }
-    previous = current;
-    if (stableFrames >= 2 && now() - stableSince >= 500) return { stable: true, capture: current };
-    // Huge tiled captures can individually exceed the stability window. Always
-    // obtain the three frames needed for a valid decision before timing out.
-  } while (comparisons < 100);
-  return { stable: false, capture: previous };
+	let previous = await capture();
+	let stableSince = now(),
+		stableFrames = 0,
+		comparisons = 0;
+	do {
+		await wait(100);
+		const current = await capture();
+		comparisons++;
+		if (compareCaptures(previous, current).equal) stableFrames++;
+		else {
+			stableSince = now();
+			stableFrames = 0;
+		}
+		previous = current;
+		if (stableFrames >= 2 && now() - stableSince >= 500) return { stable: true, capture: current };
+		// Bound observation attempts rather than image-generation time. The caller
+		// enforces the overall deadline, including slow tiled captures.
+	} while (comparisons < 100);
+	return { stable: false, capture: previous };
 }
 
 export async function capturePage(page, url, { clockTime } = {}) {
@@ -167,28 +172,41 @@ export async function capturePage(page, url, { clockTime } = {}) {
 				}),
 			);
 		});
-    // Root hydration does not await descendant async fetch/import callbacks.
-    // The offline fixture has no polling endpoints; wait for all initial work.
-    await page.waitForLoadState("networkidle", { timeout: 60000 });
+		// Root hydration does not await descendant async fetch/import callbacks.
+		// The offline fixture has no polling endpoints; wait for all initial work.
+		await page.waitForLoadState("networkidle", { timeout: 60000 });
 		// Let layout/IntersectionObserver callbacks update the docs TOC before
 		// pausing time. Freezing the application clock too early races scrollspy.
 		// Use an absolute clock for deterministic WebGL shader timestamps as well.
 		await page.waitForTimeout(200);
-		// Use one authored final CSS frame for current and subsequently mounted
-    // elements. Inline commitStyles snapshots can be discarded by Vue updates.
-    const infiniteFrames = await page.evaluate(() => {
-      const names = new Map();
-      for (const animation of document.getAnimations()) {
-        if (!animation.animationName || animation.effect?.getTiming().iterations !== Infinity) continue;
-        const frame = animation.effect.getKeyframes()[0];
-        const properties = Object.entries(frame).filter(([key]) => !["offset", "computedOffset", "easing", "composite"].includes(key));
-        const declarations = properties.map(([key,value]) => `${key.replace(/[A-Z]/g,letter=>"-"+letter.toLowerCase())}:${value};`).join("");
-        names.set(animation.animationName, `@keyframes ${CSS.escape(animation.animationName)} { from {${declarations}} to {${declarations}} }`);
-      }
-      return [...names.values()].join("\n");
-    });
-    await page.addStyleTag({ content: `
+		// Sample finite motion at its end and infinite motion at its initial frame for
+		// current and subsequently mounted elements, retaining every visible element.
+		const infiniteFrames = await page.evaluate(() => {
+			const names = new Map();
+			for (const animation of document.getAnimations()) {
+				if (!animation.animationName || animation.effect?.getTiming().iterations !== Infinity)
+					continue;
+				const frame = animation.effect.getKeyframes()[0];
+				const properties = Object.entries(frame).filter(
+					([key]) => !["offset", "computedOffset", "easing", "composite"].includes(key),
+				);
+				const declarations = properties
+					.map(
+						([key, value]) =>
+							`${key.replace(/[A-Z]/g, (letter) => "-" + letter.toLowerCase())}:${value};`,
+					)
+					.join("");
+				names.set(
+					animation.animationName,
+					`@keyframes ${CSS.escape(animation.animationName)} { from {${declarations}} to {${declarations}} }`,
+				);
+			}
+			return [...names.values()].join("\n");
+		});
+		await page.addStyleTag({
+			content: `
       ${infiniteFrames}
+      input, textarea, [contenteditable] { caret-color: transparent !important; }
       *, *::before, *::after {
         animation-timeline: auto !important;
         animation-duration: 0.001s !important;
@@ -198,7 +216,8 @@ export async function capturePage(page, url, { clockTime } = {}) {
         animation-play-state: paused !important;
         transition: none !important;
       }
-    ` });
+    `,
+		});
 		if (clock) {
 			await page.clock.pauseAt(new Date(clockTime).getTime() + 29_968);
 			// Run two frames with identical RAF timestamps. Pausing Date alone can
@@ -207,31 +226,50 @@ export async function capturePage(page, url, { clockTime } = {}) {
 		}
 		await page.mouse.move(0, 0);
 		await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
-    // Preserve the chosen authored frame as ordinary CSS, then cancel CSS
-    // animation so opacity/transform layers cannot retain animated surfaces.
-    const motionRules = await page.evaluate(() => {
-      const rules = [];
-      const metadata = new Set(["offset", "computedOffset", "easing", "composite"]);
-      for (const animation of document.getAnimations()) {
-        if (!animation.animationName || !animation.effect?.target) continue;
-        const effect = animation.effect, target = effect.target;
-        const properties = new Set(effect.getKeyframes().flatMap(frame => Object.keys(frame).filter(key => !metadata.has(key))));
-        const computed = getComputedStyle(target, effect.pseudoElement ?? null);
-        const declaration = document.createElement("div").style;
-        for (const key of properties) {
-          const property = key.replace(/[A-Z]/g, letter => "-" + letter.toLowerCase());
-          declaration.setProperty(property, computed.getPropertyValue(property), "important");
-        }
-        const parts = [];
-        for (let node = target; node; node = node.parentElement) {
-          const siblings = node.parentElement ? [...node.parentElement.children].filter(sibling => sibling.localName === node.localName && sibling.namespaceURI === node.namespaceURI) : [node];
-          parts.unshift(`${CSS.escape(node.localName)}:nth-of-type(${siblings.indexOf(node) + 1})`);
-        }
-        rules.push(`${parts.join(" > ")}${effect.pseudoElement ?? ""} { ${declaration.cssText} }`);
-      }
-      return rules.join("\n");
-    });
-    await page.addStyleTag({ content: `*, *::before, *::after { animation: none !important; transition: none !important; }\n${motionRules}` });
+		// Preserve the chosen authored frame as ordinary CSS, then cancel CSS
+		// animation so opacity/transform layers cannot retain animated surfaces.
+		const motionRules = await page.evaluate(() => {
+			const rules = [];
+			const metadata = new Set(["offset", "computedOffset", "easing", "composite"]);
+			for (const animation of document.getAnimations()) {
+				if (!animation.animationName || !animation.effect?.target) continue;
+				const effect = animation.effect,
+					target = effect.target;
+				const properties = new Set(
+					effect
+						.getKeyframes()
+						.flatMap((frame) => Object.keys(frame).filter((key) => !metadata.has(key))),
+				);
+				const computed = getComputedStyle(target, effect.pseudoElement ?? null);
+				const declaration = document.createElement("div").style;
+				for (const key of properties) {
+					const property = key.startsWith("--")
+						? key
+						: key.replace(/[A-Z]/g, (letter) => "-" + letter.toLowerCase());
+					declaration.setProperty(property, computed.getPropertyValue(property), "important");
+				}
+				const parts = [];
+				for (let node = target; node; node = node.parentElement) {
+					const siblings = node.parentElement
+						? [...node.parentElement.children].filter(
+								(sibling) =>
+									sibling.localName === node.localName &&
+									sibling.namespaceURI === node.namespaceURI,
+							)
+						: [node];
+					parts.unshift(`${CSS.escape(node.localName)}:nth-of-type(${siblings.indexOf(node) + 1})`);
+				}
+				rules.push(`${parts.join(" > ")}${effect.pseudoElement ?? ""} { ${declaration.cssText} }`);
+			}
+			return rules.join("\n");
+		});
+		await page.addStyleTag({
+			content: `*, *::before, *::after { animation: none !important; transition: none !important; }\n${motionRules}`,
+		});
+
+		await page.evaluate(async () => {
+			await document.fonts.ready;
+		});
 
 		if (errors.length)
 			return {
@@ -239,49 +277,33 @@ export async function capturePage(page, url, { clockTime } = {}) {
 				errors,
 				finalPath: new URL(page.url()).pathname,
 			};
-    if (process.env.VRT_RASTER_VARIANT?.includes("layout")) {
-      await page.evaluate(() => {
-        const before = document.documentElement.outerHTML;
-        const rule = document.createElement("style");
-        rule.textContent = "body { display: none !important; }";
-        document.head.appendChild(rule);
-        if (getComputedStyle(document.body).display !== "none") throw Error("Layout reset did not apply");
-        void document.body.offsetHeight;
-        rule.remove();
-        void document.body.offsetHeight;
-        const after = document.documentElement.outerHTML;
-        if (after !== before) {
-          let index = 0; while (index < Math.min(before.length,after.length) && before[index] === after[index]) index++;
-          throw Error("Layout rebuild changed DOM: " + JSON.stringify({index, before:before.slice(Math.max(0,index-100),index+200), after:after.slice(Math.max(0,index-100),index+200)}));
-        }
-      });
-      await page.waitForTimeout(200);
-    }
-    const { stable, capture: previous } = await captureStableFrames(() => takeSnapshot(page), { wait: ms => page.waitForTimeout(ms) });
+		const { stable, capture: previous } = await captureStableFrames(() => takeSnapshot(page), {
+			wait: (ms) => page.waitForTimeout(ms),
+		});
 		if (!stable)
 			return {
 				status: "unstable",
-				errors: ["No three identical frames spanning 500ms within 10 seconds"],
+				errors: [
+					"Frames did not stabilize after at least three captures and a 500ms stable interval",
+				],
 			};
-		const diagnostics = await page.evaluate(() => ({
-      html: document.documentElement.outerHTML.replaceAll(location.origin, "ORIGIN"),
-      elements: [...document.querySelectorAll("body *")].flatMap((node, index) => {
-        const style = getComputedStyle(node);
-        if (!parseFloat(style.borderTopLeftRadius) && !["INPUT", "TEXTAREA", "SELECT", "BUTTON", "SVG", "PATH"].includes(node.tagName.toUpperCase()) && !String(node.className).includes("object")) return [];
-        const rect = node.getBoundingClientRect();
-        const names = ["border-top-left-radius", "border-top-width", "border-top-color", "background-color", "opacity", "transform", "filter", "backdrop-filter", "box-shadow", "clip-path", "will-change", "color", "font-family", "font-size", "line-height", "animation-name", "animation-timeline", "animation-duration", "animation-delay", "animation-fill-mode", "animation-play-state", "fill", "stop-color", "color-interpolation", "stroke", "stroke-width"];
-        return [{ index, tag: node.tagName, class: node.className, rect: rect.toJSON(), style: Object.fromEntries(names.map(name => [name, style.getPropertyValue(name)])) }];
-      }),
-    }));
 		return {
-      diagnostics,
 			status: errors.length ? "runtime-error" : "captured",
 			errors,
 			...previous,
 			finalPath: new URL(page.url()).pathname,
 		};
 	} catch (error) {
-		return { status: "capture-error", errors: [error.message, ...errors, ...[...pendingLocalRequests].map(request => `Pending ${request.resourceType()} ${request.url()}`)] };
+		return {
+			status: "capture-error",
+			errors: [
+				error.message,
+				...errors,
+				...[...pendingLocalRequests].map(
+					(request) => `Pending ${request.resourceType()} ${request.url()}`,
+				),
+			],
+		};
 	}
 }
 

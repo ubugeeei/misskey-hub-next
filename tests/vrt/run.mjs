@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import { sendStaticResponse } from "./http.mjs";
 import { readFile, writeFile, appendFile, mkdir, stat } from "node:fs/promises";
 import { resolve, extname, sep } from "node:path";
 import { createHash } from "node:crypto";
@@ -17,7 +18,7 @@ const viewport =
 const colorScheme = option("theme", "light");
 if (!["light", "dark"].includes(colorScheme)) throw Error("Invalid color scheme");
 const outputDirectory = option("output-dir", ".vrt/results");
-const workers = Number(option("workers", "2"));
+const workers = Number(option("workers", "1"));
 if (![1, 2, 4, 6, 8].includes(workers)) throw Error("Invalid worker count");
 const modes = ["baseline", "migrated"];
 const allPages = await loadPages();
@@ -71,6 +72,7 @@ const scriptHash = createHash("sha256")
 	.update(await readFile(new URL(import.meta.url)))
 	.update(await readFile(new URL("./capture.mjs", import.meta.url)))
 	.update(await readFile(new URL("./snapshot.mjs", import.meta.url)))
+	.update(await readFile(new URL("./http.mjs", import.meta.url)))
 	.digest("hex");
 const manifest = {
 	startedAt,
@@ -100,11 +102,11 @@ const manifest = {
 	colorScheme,
 	renderer: "Chromium with SwiftShader WebGL fallback",
 	isolation:
-		"Fresh browser context per URL and compiler variant; no cookies, clock or storage carry over",
+		"Fresh browser context per URL and compiler variant; one capture at a time per browser; no cookies, clock or storage carry over",
 	locale: benchmark.intlLocale ?? "en-US",
 	timezone: "Asia/Tokyo",
 	policy:
-		"Exact decoded RGBA and dimensions, stable consecutive frames, no masks/tolerance. Offline external network; empty emoji cache; seeded client randomness; frozen MFM/static clocks at absolute reference clock +30 seconds, RAF timestamps fixed to 30000ms and two final frames advanced for deterministic shader phase; motion disabled after layout settles. Pages above 16000px use 4096px CDP clips at unchanged document coordinates; all pixels compared, no scrolling or masks. Capture deadline 300s. Browser Intl fallback matches the build; video is decoded and paused at time zero; LCD subpixel text is disabled.",
+		"Exact decoded RGBA and dimensions, at least three identical frames spanning 500ms; up to 100 sampled comparisons 100ms apart, with screenshot generation excluded from the observation budget, no masks/tolerance. Offline external network; empty emoji cache; seeded client randomness; frozen MFM/static clocks at absolute reference clock +30 seconds, RAF timestamps fixed to 30000ms and two final frames advanced for deterministic shader phase; CSS finite motion uses its final frame and infinite motion its initial frame. Those authored properties are retained as ordinary CSS before CSS animation is canceled, including scroll-linked and subsequently mounted elements. Every page uses 4096px CDP clips at unchanged document coordinates; all pixels compared, no scrolling or masks. Capture deadline 300s. Browser Intl fallback matches the build; video is decoded and paused at time zero; LCD subpixel text and partial raster are disabled; all compositor stages complete before drawing, software compositing and sRGB are fixed. Initial descendant requests reach network idle before CSS state is frozen.",
 };
 const rows = [];
 if (process.argv.includes("--resume")) {
@@ -215,7 +217,6 @@ async function saveSamples(mode, entry, reference, candidate, comparison) {
 	await mkdir(dir, { recursive: true });
 	await writeFile(dir + "/baseline.png", referenceBytes);
 	await writeFile(dir + "/candidate.png", candidateBytes);
-  await writeFile(dir + "/diagnostics.json", JSON.stringify({reference:reference.diagnostics,candidate:candidate.diagnostics}, null, 2));
 	if (reference.tiles)
 		await writeFile(
 			dir + "/tile.json",
@@ -240,11 +241,10 @@ try {
 				if (file !== root && !file.startsWith(root + sep)) throw new Error("Invalid path");
 				if ((await stat(file)).isDirectory()) file = resolve(file, "index.html");
 				const bytes = await readFile(file);
-				res.writeHead(200, {
+				sendStaticResponse(req, res, bytes, {
 					"Content-Type": mime[extname(file)] ?? "application/octet-stream",
 					"Cache-Control": extname(file) === ".html" ? "no-cache" : "public,max-age=3600",
 				});
-				res.end(bytes);
 			} catch {
 				res.writeHead(404);
 				res.end("Not found");
@@ -254,19 +254,16 @@ try {
 		servers.push(server);
 		origins[mode] = `http://127.0.0.1:${server.address().port}`;
 	}
-	const rasterArgs = process.env.VRT_DETERMINISTIC_RASTER === "1"
-    ? ["--disable-partial-raster", "--run-all-compositor-stages-before-draw", "--disable-gpu-compositing", "--force-color-profile=srgb", "--disable-threaded-animation"] : [];
-  const variant = process.env.VRT_RASTER_VARIANT ?? "software";
-  if (variant.startsWith("default")) rasterArgs.splice(rasterArgs.indexOf("--disable-gpu-compositing"), 1);
-  if (variant.endsWith("scalar")) rasterArgs.push("--disable-skia-runtime-opts");
-  if (variant.includes("serial")) rasterArgs.push("--disable-checker-imaging", "--num-raster-threads=1");
-  if (variant.includes("new-surface")) rasterArgs.push("--enable-features=CDPScreenshotNewSurface");
-  if (variant.includes("repaint")) rasterArgs.push("--enable-gpu-benchmarking");
-  if (variant === "angle") { rasterArgs.splice(rasterArgs.indexOf("--disable-gpu-compositing"), 1); rasterArgs.push("--use-gl=angle", "--use-angle=swiftshader", "--enable-gpu-rasterization"); }
-  manifest.rasterVariant = variant;
-  manifest.rasterArgs = rasterArgs;
-  manifest.browserIsolation = process.env.VRT_BROWSER_ISOLATION ?? "context";
-  browser = await chromium.launch({ args: ["--enable-unsafe-swiftshader", "--disable-lcd-text", ...rasterArgs] });
+	manifest.browserArgs = [
+		"--enable-unsafe-swiftshader",
+		"--disable-lcd-text",
+		"--disable-partial-raster",
+		"--run-all-compositor-stages-before-draw",
+		"--disable-gpu-compositing",
+		"--force-color-profile=srgb",
+		"--disable-threaded-animation",
+	];
+	browser = await chromium.launch({ args: manifest.browserArgs });
 	manifest.browserVersion = browser.version();
 	await writeFile(manifestFile, JSON.stringify(manifest, null, 2) + "\n");
 	console.log(
@@ -277,8 +274,7 @@ try {
 			while (cursor < remaining.length) {
 				const entry = remaining[cursor++];
 				const capture = async (mode) => {
-					const captureBrowser = process.env.VRT_BROWSER_ISOLATION === "capture" ? await chromium.launch({ args: ["--enable-unsafe-swiftshader", "--disable-lcd-text", ...rasterArgs] }) : browser;
-					const context = await createFixtureContext(captureBrowser, {
+					const context = await createFixtureContext(browser, {
 						viewport,
 						colorScheme,
 						locale: manifest.locale,
@@ -304,7 +300,6 @@ try {
 					} finally {
 						clearTimeout(timer);
 						await context.close();
-            if (captureBrowser !== browser) await captureBrowser.close();
 					}
 				};
 				const reference = await capture("baseline");
