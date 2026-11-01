@@ -322,6 +322,7 @@ export async function capturePage(page, url, { clockTime } = {}) {
 export async function createFixtureContext(browser, options = {}) {
 	const context = await browser.newContext({
 		viewport: options.viewport ?? { width: 1440, height: 900 },
+    ...(process.env.VRT_NATIVE_SCREEN === "1" ? {screen:{width:800,height:600}} : {}),
 		locale: options.locale ?? "en-US",
 		timezoneId: "Asia/Tokyo",
 		colorScheme: options.colorScheme ?? "light",

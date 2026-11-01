@@ -76,6 +76,7 @@ const scriptHash = createHash("sha256")
 	.update(await readFile(new URL("./readiness.mjs", import.meta.url)))
 	.digest("hex");
 const manifest = {
+  nativeScreenProfile: process.env.VRT_NATIVE_SCREEN === "1",
   browserChannel: process.env.VRT_BROWSER_CHANNEL ?? "shell",
   softwareCompositing: process.env.VRT_SOFTWARE_COMPOSITING !== "0",
 	startedAt,
