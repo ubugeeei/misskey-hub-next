@@ -15,6 +15,21 @@ test("Shared Japanese FAQ graphs retain their original render order", () => {
 	assert.deepEqual(lanes.flat().sort(), [0, 1, 2]);
 });
 
+test("Merged locale groups keep original page order with fewer workers", () => {
+	const pages = [
+		{ locale: "it" },
+		{ locale: "fr" },
+		{ locale: "ja-ks" },
+		{ locale: "it" },
+		{ locale: "ja" },
+		{ locale: "it" },
+	];
+	assert.deepEqual(assignLanes(pages, 1), [[0, 1, 2, 3, 4, 5]]);
+	for (const lane of assignLanes(pages, 2)) {
+		assert.ok(lane.every((index, position) => position === 0 || lane[position - 1] < index));
+	}
+});
+
 test("Payload trimming retains aliases that acquire rendered related HTML", () => {
 	const shared = { title: "FAQ", body: { children: [] } };
 	const pages = [

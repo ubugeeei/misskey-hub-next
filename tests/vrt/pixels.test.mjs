@@ -88,11 +88,20 @@ test("Fast identical frames must span the minimum stable interval", async () => 
 });
 
 test("Slow captures may settle after an initial repaint", async () => {
-  let time = 0, calls = 0;
-  const result = await captureStableFrames(async () => {
-    time += 15000;
-    return capture(++calls > 1);
-  }, { now: () => time, wait: async ms => { time += ms; } });
-  assert.equal(result.stable, true);
-  assert.ok(calls >= 4);
+	let time = 0,
+		calls = 0;
+	const result = await captureStableFrames(
+		async () => {
+			time += 15000;
+			return capture(++calls > 1);
+		},
+		{
+			now: () => time,
+			wait: async (ms) => {
+				time += ms;
+			},
+		},
+	);
+	assert.equal(result.stable, true);
+	assert.ok(calls >= 4);
 });
