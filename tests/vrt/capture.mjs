@@ -150,6 +150,9 @@ export async function capturePage(page, url, { clockTime } = {}) {
 				}),
 			);
 		});
+    // Root hydration does not await descendant async fetch/import callbacks.
+    // The offline fixture has no polling endpoints; wait for all initial work.
+    await page.waitForLoadState("networkidle", { timeout: 15000 });
 		// Let layout/IntersectionObserver callbacks update the docs TOC before
 		// pausing time. Freezing the application clock too early races scrollspy.
 		// Use an absolute clock for deterministic WebGL shader timestamps as well.
@@ -200,7 +203,7 @@ export async function capturePage(page, url, { clockTime } = {}) {
         const style = getComputedStyle(node);
         if (!parseFloat(style.borderTopLeftRadius) && !["INPUT", "TEXTAREA", "SELECT", "BUTTON", "SVG", "PATH"].includes(node.tagName.toUpperCase()) && !String(node.className).includes("object")) return [];
         const rect = node.getBoundingClientRect();
-        const names = ["border-top-left-radius", "border-top-width", "border-top-color", "background-color", "opacity", "transform", "filter", "backdrop-filter", "box-shadow", "clip-path", "will-change", "color", "font-family", "font-size", "line-height", "animation-name", "animation-timeline", "animation-duration", "animation-delay", "animation-fill-mode", "animation-play-state"];
+        const names = ["border-top-left-radius", "border-top-width", "border-top-color", "background-color", "opacity", "transform", "filter", "backdrop-filter", "box-shadow", "clip-path", "will-change", "color", "font-family", "font-size", "line-height", "animation-name", "animation-timeline", "animation-duration", "animation-delay", "animation-fill-mode", "animation-play-state", "fill", "stop-color", "color-interpolation", "stroke", "stroke-width"];
         return [{ index, tag: node.tagName, class: node.className, rect: rect.toJSON(), style: Object.fromEntries(names.map(name => [name, style.getPropertyValue(name)])) }];
       }),
     }));
