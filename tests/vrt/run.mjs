@@ -255,7 +255,7 @@ try {
 		origins[mode] = `http://127.0.0.1:${server.address().port}`;
 	}
 	const rasterArgs = process.env.VRT_DETERMINISTIC_RASTER === "1"
-    ? ["--disable-partial-raster", "--run-all-compositor-stages-before-draw", "--disable-gpu-compositing", "--force-color-profile=srgb"] : [];
+    ? ["--disable-partial-raster", "--run-all-compositor-stages-before-draw", "--disable-gpu-compositing", "--force-color-profile=srgb", "--disable-threaded-animation"] : [];
   manifest.rasterArgs = rasterArgs;
   browser = await chromium.launch({ args: ["--enable-unsafe-swiftshader", "--disable-lcd-text", ...rasterArgs] });
 	manifest.browserVersion = browser.version();
