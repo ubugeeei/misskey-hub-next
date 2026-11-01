@@ -47,7 +47,6 @@ const rank = (page) => {
 pages.sort((a, b) => rank(a) - rank(b));
 const limit = Number(option("limit", String(pages.length)));
 pages = pages.slice(0, limit);
-pages = Array.from({length:20}, () => pages).flat();
 const scopeSize = pages.length;
 const shard = option("shard", "1/1");
 if (!/^\d+\/\d+$/.test(shard)) throw Error("Invalid shard; use 1/4 through 4/4");
@@ -271,7 +270,7 @@ try {
 		servers.push(server);
 		origins[mode] = `http://127.0.0.1:${server.address().port}`;
 	}
-	manifest.browserArgs = [...fixtureBrowserArgs, "--enable-gpu-benchmarking"];
+	manifest.browserArgs = [...fixtureBrowserArgs];
 	if (manifest.controlledFrames) {
 		if (process.platform !== "linux")
 			throw Error("Controlled frames require the pinned Linux headless shell");

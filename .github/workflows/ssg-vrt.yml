@@ -1,4 +1,4 @@
-name: SSG code paint control
+name: SSG Chromium 145 controlled frame qualification
 on:
   workflow_dispatch:
 permissions:
@@ -7,13 +7,15 @@ jobs:
   contract:
     runs-on: ubuntu-latest
     container:
-      image: mcr.microsoft.com/playwright:v1.64.1-noble@sha256:47b510dd9230bf0b9bfc9b20102241e577ea7a99334ab4c3ca19f19770e9b8ea
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
     strategy:
       fail-fast: false
       matrix:
         viewport: [desktop, mobile]
+        theme: [light, dark]
     env:
       CONTROL_VIEWPORT: ${{ matrix.viewport }}
+      CONTROL_THEME: ${{ matrix.theme }}
       PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
       VRT_CONTROLLED_FRAMES: "1"
     timeout-minutes: 55
@@ -30,11 +32,13 @@ jobs:
           name: vrt-sites
           run-id: 41296551808
           github-token: ${{ github.token }}
-      - name: Reproduce both code-page differences with DOM and computed style evidence
-        run: node .vrt-control/code-control.mjs
+      - name: Verify the exact production capture contract
+        run: node tests/vrt/frame-contract.mjs
+      - name: Qualify original browser with controlled compositor frames
+        run: node .vrt-control/legacy-frames.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: code-paint-probes-${{ matrix.viewport }}
+          name: chromium145-${{ matrix.viewport }}-${{ matrix.theme }}
           path: output/playwright/
           retention-days: 7

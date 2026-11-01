@@ -1,9 +1,7 @@
-import { writeFile } from "node:fs/promises";
-import { createHash } from "node:crypto";
 import { PNG } from "pngjs";
 import { takeSnapshot } from "./snapshot.mjs";
 import { waitForLocalIdle } from "./readiness.mjs";
-import { startFrameControl, withFrameProgress } from "./frames.mjs";
+import { startFrameControl } from "./frames.mjs";
 
 // Identical PNG bytes necessarily contain identical pixels. Decode only when
 // encoded bytes differ; metadata/compression differences still use strict RGBA.
@@ -294,42 +292,10 @@ export async function capturePage(page, url, { clockTime } = {}) {
 				errors,
 				finalPath: new URL(page.url()).pathname,
 			};
-        const traceBefore = await page.evaluate(() => [...document.querySelectorAll("pre")].map(p => p.outerHTML));
 		await frameControl?.pause();
 		const { stable, capture: previous } = await captureStableFrames(() => takeSnapshot(page), {
 			wait: (ms) => page.waitForTimeout(ms),
 		});
-        const rasterProbes = [];
-        const originalDOM = await page.content();
-        const directoryForProbe=process.argv.find(arg=>arg.startsWith("--output-dir="))?.slice(13);
-        const probeKey=`${new URL(url).port}-${createHash("sha256").update(new URL(url).pathname).digest("hex").slice(0,12)}-${Date.now()}`;
-        for (const policy of ["native-invalidate", "layout-rebuild"]) {
-          await withFrameProgress(page, () => page.evaluate(policy => {
-            if(policy === "native-invalidate") {
-              if(!window.chrome?.gpuBenchmarking?.setNeedsDisplayOnAllLayers) throw Error("Native invalidation API unavailable");
-              chrome.gpuBenchmarking.setNeedsDisplayOnAllLayers();
-            } else {
-              const style=document.createElement("style");style.textContent="body{display:none!important}";document.head.append(style);void document.body.offsetHeight;style.remove();void document.body.offsetHeight;
-            }
-          }, policy), true);
-          const after = await takeSnapshot(page);
-          const difference=compareCaptures(previous, after);
-          const unchangedDOM=originalDOM === await page.content();
-          rasterProbes.push({policy,unchangedDOM,...difference});
-          if(!difference.equal && directoryForProbe) {
-            const tile=difference.differentTile ?? 0;
-            await writeFile(`${directoryForProbe}/probe-${probeKey}-${policy}-before.png`, previous.tiles[tile].bytes);
-            await writeFile(`${directoryForProbe}/probe-${probeKey}-${policy}-after.png`, after.tiles[tile].bytes);
-          }
-        }
-        const forensic = await page.evaluate(() => ({
-          html:document.documentElement.outerHTML,
-          metrics:{inner:[innerWidth,innerHeight],screen:[screen.width,screen.height],scroll:[scrollX,scrollY]},
-          fonts:{status:document.fonts.status,faces:[...document.fonts].map(f=>({family:f.family,status:f.status}))},
-          code:[...document.querySelectorAll("pre")].map(p=>({html:p.outerHTML,text:p.textContent,scroll:[p.scrollLeft,p.scrollTop],nodes:[p,...p.querySelectorAll("*")].map(n=>{const s=getComputedStyle(n);return {tag:n.localName,text:n.textContent,rect:n.getBoundingClientRect().toJSON(),style:Object.fromEntries(["display","visibility","opacity","color","backgroundColor","fontFamily","fontSize","fontStyle","fontWeight","lineHeight","transform","contentVisibility","contain","clipPath","overflow","filter"].map(k=>[k,s[k]]))}})}))
-        }));
-        const directory=process.argv.find(arg=>arg.startsWith("--output-dir="))?.slice(13);
-        if(directory) await writeFile(`${directory}/trace-${new URL(url).port}-${createHash("sha256").update(new URL(url).pathname).digest("hex").slice(0,12)}-${Date.now()}.json`,JSON.stringify({url,stable,traceBefore,forensic,rasterProbes}));
 		if (!stable)
 			return {
 				status: "unstable",
