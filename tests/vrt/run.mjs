@@ -259,6 +259,7 @@ try {
   const variant = process.env.VRT_RASTER_VARIANT ?? "software";
   if (variant.startsWith("default")) rasterArgs.splice(rasterArgs.indexOf("--disable-gpu-compositing"), 1);
   if (variant.endsWith("scalar")) rasterArgs.push("--disable-skia-runtime-opts");
+  if (variant.includes("serial")) rasterArgs.push("--disable-checker-imaging", "--num-raster-threads=1");
   manifest.rasterVariant = variant;
   manifest.rasterArgs = rasterArgs;
   browser = await chromium.launch({ args: ["--enable-unsafe-swiftshader", "--disable-lcd-text", ...rasterArgs] });

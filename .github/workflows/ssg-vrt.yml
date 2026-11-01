@@ -19,7 +19,7 @@ jobs:
       matrix:
         viewport: [mobile]
         theme: [light, dark]
-        raster: [software]
+        raster: [software, software-serial, software-fullclip, software-serial-fullclip]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

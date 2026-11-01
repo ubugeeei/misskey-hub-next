@@ -2,19 +2,15 @@
 // 130,000px; a single decoded PNG can occupy >700MB. CDP clips preserve the same
 // document coordinates (including fixed elements) while bounding decode memory.
 export async function takeSnapshot(page) {
-	const height = await page.evaluate(() => document.documentElement.scrollHeight);
-	if (height <= 16000 && process.env.VRT_FORCE_TILES !== "1")
-		return {
-			bytes: await page.screenshot({ fullPage: true, animations: "allow", timeout: 30000 }),
-		};
 	const session = await page.context().newCDPSession(page);
 	try {
 		const { cssContentSize } = await session.send("Page.getLayoutMetrics");
 		const width = Math.ceil(cssContentSize.width),
 			height = Math.ceil(cssContentSize.height),
 			tiles = [];
-		for (let y = 0; y < height; y += 4096) {
-			const tileHeight = Math.min(4096, height - y);
+		const tileSize = process.env.VRT_RASTER_VARIANT?.includes("fullclip") ? 16384 : 4096;
+		for (let y = 0; y < height; y += tileSize) {
+			const tileHeight = Math.min(tileSize, height - y);
 			const { data } = await session.send("Page.captureScreenshot", {
 				format: "png",
 				optimizeForSpeed: true,
