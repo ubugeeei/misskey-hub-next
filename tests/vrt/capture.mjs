@@ -159,7 +159,19 @@ export async function capturePage(page, url, { clockTime } = {}) {
 		await page.waitForTimeout(200);
 		// Use one authored final CSS frame for current and subsequently mounted
     // elements. Inline commitStyles snapshots can be discarded by Vue updates.
+    const infiniteFrames = await page.evaluate(() => {
+      const names = new Map();
+      for (const animation of document.getAnimations()) {
+        if (!animation.animationName || animation.effect?.getTiming().iterations !== Infinity) continue;
+        const frame = animation.effect.getKeyframes()[0];
+        const properties = Object.entries(frame).filter(([key]) => !["offset", "computedOffset", "easing", "composite"].includes(key));
+        const declarations = properties.map(([key,value]) => `${key.replace(/[A-Z]/g,letter=>"-"+letter.toLowerCase())}:${value};`).join("");
+        names.set(animation.animationName, `@keyframes ${CSS.escape(animation.animationName)} { from {${declarations}} to {${declarations}} }`);
+      }
+      return [...names.values()].join("\n");
+    });
     await page.addStyleTag({ content: `
+      ${infiniteFrames}
       *, *::before, *::after {
         animation-timeline: auto !important;
         animation-duration: 0.001s !important;
