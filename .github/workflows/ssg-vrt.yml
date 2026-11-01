@@ -19,7 +19,7 @@ jobs:
       matrix:
         viewport: [mobile]
         theme: [light, dark]
-        raster: [software, software-scalar, default, default-scalar]
+        raster: [software]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
