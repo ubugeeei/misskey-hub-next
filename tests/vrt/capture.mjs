@@ -71,6 +71,24 @@ export function comparePixels(reference, candidate) {
 	};
 }
 
+export async function captureStableFrames(capture, { wait, now = () => performance.now() }) {
+  let previous = await capture();
+  const started = now();
+  let stableSince = started, stableFrames = 0, comparisons = 0;
+  do {
+    await wait(100);
+    const current = await capture();
+    comparisons++;
+    if (compareCaptures(previous, current).equal) stableFrames++;
+    else { stableSince = now(); stableFrames = 0; }
+    previous = current;
+    if (stableFrames >= 2 && now() - stableSince >= 500) return { stable: true, capture: current };
+    // Huge tiled captures can individually exceed the stability window. Always
+    // obtain the three frames needed for a valid decision before timing out.
+  } while (comparisons < 2 || now() - started < 10000);
+  return { stable: false, capture: previous };
+}
+
 export async function capturePage(page, url, { clockTime } = {}) {
 	const clock = /\/features\/mfm\//.test(url) || !/\/(docs|blog)\//.test(url);
 	const errors = [];
@@ -222,18 +240,7 @@ export async function capturePage(page, url, { clockTime } = {}) {
 				errors,
 				finalPath: new URL(page.url()).pathname,
 			};
-		const started = Date.now();
-		let previous = await takeSnapshot(page);
-    let stableSince = Date.now(), stableFrames = 0;
-		let stable = false;
-		do {
-      await page.waitForTimeout(100);
-			const current = await takeSnapshot(page);
-      if (compareCaptures(previous, current).equal) stableFrames++;
-      else { stableSince = Date.now(); stableFrames = 0; }
-      stable = stableFrames >= 2 && Date.now() - stableSince >= 500;
-			previous = current;
-		} while (!stable && Date.now() - started < 10000);
+    const { stable, capture: previous } = await captureStableFrames(() => takeSnapshot(page), { wait: ms => page.waitForTimeout(ms) });
 		if (!stable)
 			return {
 				status: "unstable",

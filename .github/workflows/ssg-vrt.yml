@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        viewport: [desktop]
+        viewport: [desktop, mobile]
         theme: [light, dark]
     steps:
       - uses: actions/checkout@v4
