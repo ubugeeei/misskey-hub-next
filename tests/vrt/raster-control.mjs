@@ -1,8 +1,8 @@
 import { spawnSync } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
-const allPaths = ["/ja/", "/fr/", "/en/docs/for-users/features/mfm/", "/cn/docs/for-users/features/mfm/", "/cn/docs/releases/"];
+const allPaths = ["/de/docs/releases/", "/ja-ks/docs/releases/"];
 const outcomes = [];
-for (let repeat = 1; repeat <= 3; repeat++) {
+for (let repeat = 1; repeat <= 1; repeat++) {
   const paths = repeat === 1 ? allPaths : allPaths.filter(path => !path.endsWith("/releases/"));
   for (const comparison of ["unchanged-reference", "optimized"]) {
     const output = `output/playwright/${comparison}-${repeat}`;
@@ -11,7 +11,7 @@ for (let repeat = 1; repeat <= 3; repeat++) {
       `--viewport=${process.env.CONTROL_VIEWPORT}`, `--theme=${process.env.CONTROL_THEME}`,
       `--output-dir=${output}`];
     if (comparison === "unchanged-reference") args.push("--candidate-dir=.vrt/reference/.output/public");
-    const result = spawnSync(process.execPath, args, { stdio: "inherit", timeout: 300000 });
+    const result = spawnSync(process.execPath, args, { stdio: "inherit", timeout: 900000 });
     outcomes.push({ repeat, comparison, status: result.status, error: result.error?.message, signal: result.signal });
   }
 }

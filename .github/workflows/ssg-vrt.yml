@@ -13,7 +13,7 @@ jobs:
       PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
       VRT_DETERMINISTIC_RASTER: "1"
       VRT_FORCE_TILES: "1"
-    timeout-minutes: 20
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:

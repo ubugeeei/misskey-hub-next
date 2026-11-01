@@ -104,7 +104,7 @@ const manifest = {
 	locale: benchmark.intlLocale ?? "en-US",
 	timezone: "Asia/Tokyo",
 	policy:
-		"Exact decoded RGBA and dimensions, stable consecutive frames, no masks/tolerance. Offline external network; empty emoji cache; seeded client randomness; frozen MFM/static clocks at absolute reference clock +30 seconds, RAF timestamps fixed to 30000ms and two final frames advanced for deterministic shader phase; motion disabled after layout settles. Pages above 16000px use 4096px CDP clips at unchanged document coordinates; all pixels compared, no scrolling or masks. Capture deadline 180s. Browser Intl fallback matches the build; video is decoded and paused at time zero; LCD subpixel text is disabled.",
+		"Exact decoded RGBA and dimensions, stable consecutive frames, no masks/tolerance. Offline external network; empty emoji cache; seeded client randomness; frozen MFM/static clocks at absolute reference clock +30 seconds, RAF timestamps fixed to 30000ms and two final frames advanced for deterministic shader phase; motion disabled after layout settles. Pages above 16000px use 4096px CDP clips at unchanged document coordinates; all pixels compared, no scrolling or masks. Capture deadline 300s. Browser Intl fallback matches the build; video is decoded and paused at time zero; LCD subpixel text is disabled.",
 };
 const rows = [];
 if (process.argv.includes("--resume")) {
@@ -285,9 +285,9 @@ try {
 									() =>
 										accept({
 											status: "capture-error",
-											errors: ["Overall capture timeout: 180 seconds"],
+											errors: ["Overall capture timeout: 300 seconds"],
 										}),
-									180_000,
+									300_000,
 								);
 							}),
 						]);

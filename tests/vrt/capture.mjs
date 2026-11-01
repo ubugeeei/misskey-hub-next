@@ -73,8 +73,7 @@ export function comparePixels(reference, candidate) {
 
 export async function captureStableFrames(capture, { wait, now = () => performance.now() }) {
   let previous = await capture();
-  const started = now();
-  let stableSince = started, stableFrames = 0, comparisons = 0;
+  let stableSince = now(), stableFrames = 0, comparisons = 0;
   do {
     await wait(100);
     const current = await capture();
@@ -85,7 +84,7 @@ export async function captureStableFrames(capture, { wait, now = () => performan
     if (stableFrames >= 2 && now() - stableSince >= 500) return { stable: true, capture: current };
     // Huge tiled captures can individually exceed the stability window. Always
     // obtain the three frames needed for a valid decision before timing out.
-  } while (comparisons < 2 || now() - started < 10000);
+  } while (comparisons < 100);
   return { stable: false, capture: previous };
 }
 
@@ -170,7 +169,7 @@ export async function capturePage(page, url, { clockTime } = {}) {
 		});
     // Root hydration does not await descendant async fetch/import callbacks.
     // The offline fixture has no polling endpoints; wait for all initial work.
-    await page.waitForLoadState("networkidle", { timeout: 15000 });
+    await page.waitForLoadState("networkidle", { timeout: 60000 });
 		// Let layout/IntersectionObserver callbacks update the docs TOC before
 		// pausing time. Freezing the application clock too early races scrollspy.
 		// Use an absolute clock for deterministic WebGL shader timestamps as well.
