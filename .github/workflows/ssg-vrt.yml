@@ -1,4 +1,4 @@
-name: SSG frame contract
+name: SSG code paint control
 on:
   workflow_dispatch:
 permissions:
@@ -11,7 +11,7 @@ jobs:
     env:
       PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
       VRT_CONTROLLED_FRAMES: "1"
-    timeout-minutes: 10
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -20,5 +20,16 @@ jobs:
           node-version: "26.13.0"
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
-      - name: Verify every tiled pixel and unchanged viewport metrics
-        run: node tests/vrt/frame-contract.mjs
+      - uses: actions/download-artifact@v4
+        with:
+          name: vrt-sites
+          run-id: 41296551808
+          github-token: ${{ github.token }}
+      - name: Reproduce both code-page differences with DOM and computed style evidence
+        run: node .vrt-control/code-control.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: code-paint-traces
+          path: output/playwright/
+          retention-days: 7

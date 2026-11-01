@@ -29,6 +29,8 @@ export function validateCoverage(reports, expectedPaths, { referenceCommit, shar
 		for (const key of [
 			"sourceFingerprint",
 			"scriptHash",
+			"captureSettings",
+			"rendererFingerprint",
 			"referenceOutputFingerprint",
 			"candidateOutputFingerprint",
 			"benchmarkSha256",

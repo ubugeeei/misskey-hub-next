@@ -1,5 +1,6 @@
 import { createServer } from "node:http";
 import { sendStaticResponse } from "./http.mjs";
+import { fixtureBrowserArgs, frameControlArgs, readPhysicalScreen } from "./frames.mjs";
 import { readFile, writeFile, appendFile, mkdir, stat } from "node:fs/promises";
 import { resolve, extname, sep } from "node:path";
 import { createHash } from "node:crypto";
@@ -61,6 +62,13 @@ const startedAt = new Date().toISOString();
 const sourceBefore = await sourceFingerprint();
 const benchmarkFile = resolve(option("reference-metadata", ".vrt/baseline-build.json"));
 const benchmark = JSON.parse(await readFile(benchmarkFile, "utf8"));
+if (benchmark.buildInputsSha256) {
+	const actual = createHash("sha256")
+		.update(await readFile(".vrt/build-inputs.json"))
+		.digest("hex");
+	if (actual !== benchmark.buildInputsSha256) throw Error("VRT build input checksum changed");
+}
+
 const referenceDirectory = resolve(
 	option(
 		"reference-dir",
@@ -74,15 +82,15 @@ const scriptHash = createHash("sha256")
 	.update(await readFile(new URL("./snapshot.mjs", import.meta.url)))
 	.update(await readFile(new URL("./http.mjs", import.meta.url)))
 	.update(await readFile(new URL("./readiness.mjs", import.meta.url)))
-  .update(await readFile(new URL("./frames.mjs", import.meta.url)))
+	.update(await readFile(new URL("./frames.mjs", import.meta.url)))
 	.digest("hex");
 const manifest = {
-  frameControlMode: process.env.VRT_FRAME_MODE ?? "auto",
-  jpegDelivery: process.env.VRT_JPEG_DELIVERY ?? "direct",
-  nativeScreenProfile: process.env.VRT_NATIVE_SCREEN === "1",
-  browserChannel: process.env.VRT_BROWSER_CHANNEL ?? "shell",
-  softwareCompositing: process.env.VRT_SOFTWARE_COMPOSITING !== "0",
 	startedAt,
+	controlledFrames: process.env.VRT_CONTROLLED_FRAMES === "1",
+	captureSettings:
+		process.env.VRT_CONTROLLED_FRAMES === "1"
+			? "controlled-frames/native-screen"
+			: "automatic-frames/viewport-screen",
 	sourceFingerprint: sourceBefore,
 	sample,
 	pages: pages.map((page) => page.path),
@@ -113,7 +121,7 @@ const manifest = {
 	locale: benchmark.intlLocale ?? "en-US",
 	timezone: "Asia/Tokyo",
 	policy:
-		"Exact decoded RGBA and dimensions, at least three identical frames spanning 500ms; up to 100 sampled comparisons 100ms apart, with screenshot generation excluded from the observation budget, no masks/tolerance. Offline external network; empty emoji cache; seeded client randomness; frozen MFM/static clocks at absolute reference clock +30 seconds, RAF timestamps fixed to 30000ms and two final frames advanced for deterministic shader phase; CSS finite motion uses its final frame and infinite motion its initial frame. Those authored properties are retained as ordinary CSS before CSS animation is canceled, including scroll-linked and subsequently mounted elements. Every page uses 4096px CDP clips at unchanged document coordinates; all pixels compared, no scrolling or masks. Capture deadline 300s. Browser Intl fallback matches the build; video is decoded and paused at time zero; LCD subpixel text and partial raster are disabled; all compositor stages complete before drawing, software compositing and sRGB are fixed. After explicit font/image/video decode, initial local descendant fetch/import requests must complete and remain quiet for 500ms within a 60s readiness deadline. Blocked external requests do not control readiness.",
+		"Exact decoded RGBA and dimensions, at least three identical frames spanning 500ms; up to 100 sampled comparisons 100ms apart, with screenshot generation excluded from the observation budget, no masks/tolerance. Offline external network; empty emoji cache; seeded client randomness; frozen MFM/static clocks at absolute reference clock +30 seconds, RAF timestamps fixed to 30000ms and two final frames advanced for deterministic shader phase; CSS finite motion uses its final frame and infinite motion its initial frame. Those authored properties are retained as ordinary CSS before CSS animation is canceled, including scroll-linked and subsequently mounted elements. Every page uses 4096px CDP clips at unchanged document coordinates; all pixels compared, no scrolling or masks. Capture deadline 300s. Browser Intl fallback matches the build; video is decoded and paused at time zero; LCD subpixel text and partial raster are disabled; all compositor stages complete before drawing, software compositing and sRGB are fixed. After explicit font/image/video decode, initial local descendant fetch/import requests must complete and remain quiet for 500ms within a 60s readiness deadline. Blocked external requests do not control readiness. On the pinned Linux fixture, externally driven compositor frames order original JPEG decode and each full CDP clip; the physical screen is sampled before capture and stays constant.",
 };
 const rows = [];
 if (process.argv.includes("--resume")) {
@@ -123,6 +131,7 @@ if (process.argv.includes("--resume")) {
 		previous.shard !== manifest.shard ||
 		previous.locale !== manifest.locale ||
 		previous.scriptHash !== scriptHash ||
+		previous.captureSettings !== manifest.captureSettings ||
 		previous.benchmarkSha256 !== manifest.benchmarkSha256 ||
 		previous.referenceOutputFingerprint !== manifest.referenceOutputFingerprint ||
 		previous.candidateOutputFingerprint !== manifest.candidateOutputFingerprint ||
@@ -261,20 +270,24 @@ try {
 		servers.push(server);
 		origins[mode] = `http://127.0.0.1:${server.address().port}`;
 	}
-	manifest.browserArgs = [
-		"--enable-unsafe-swiftshader",
-		"--disable-lcd-text",
-		"--disable-partial-raster",
-		"--run-all-compositor-stages-before-draw",
-		"--disable-gpu-compositing",
-		"--force-color-profile=srgb",
-		"--disable-threaded-animation",
-	];
-	if (process.env.VRT_FRAME_MODE === "manual" || process.env.VRT_FRAME_MODE === "flags") manifest.browserArgs.push("--disable-threaded-scrolling", "--disable-new-content-rendering-timeout");
-  if (process.env.VRT_FRAME_MODE === "manual") manifest.browserArgs.push("--enable-begin-frame-control");
-  if (process.env.VRT_SOFTWARE_COMPOSITING === "0") manifest.browserArgs = manifest.browserArgs.filter(arg => arg !== "--disable-gpu-compositing");
-  browser = await chromium.launch({ channel: process.env.VRT_BROWSER_CHANNEL === "chromium" ? "chromium" : undefined, args: manifest.browserArgs });
+	manifest.browserArgs = [...fixtureBrowserArgs];
+	if (manifest.controlledFrames) {
+		if (process.platform !== "linux")
+			throw Error("Controlled frames require the pinned Linux headless shell");
+		manifest.browserArgs.push(...frameControlArgs);
+	}
+	browser = await chromium.launch({ args: manifest.browserArgs });
 	manifest.browserVersion = browser.version();
+	if (manifest.controlledFrames) manifest.screen = await readPhysicalScreen(browser);
+	manifest.rendererFingerprint = createHash("sha256")
+		.update(
+			JSON.stringify({
+				args: manifest.browserArgs,
+				screen: manifest.screen,
+				captureSettings: manifest.captureSettings,
+			}),
+		)
+		.digest("hex");
 	await writeFile(manifestFile, JSON.stringify(manifest, null, 2) + "\n");
 	console.log(
 		`[full-vrt] ${pages.length} URLs, ${modes.length} modes, ${workers} workers; ${remaining.length} URLs remaining`,
@@ -286,6 +299,7 @@ try {
 				const capture = async (mode) => {
 					const context = await createFixtureContext(browser, {
 						viewport,
+						screen: manifest.screen,
 						colorScheme,
 						locale: manifest.locale,
 					});

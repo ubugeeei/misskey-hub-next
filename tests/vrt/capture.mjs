@@ -1,3 +1,5 @@
+import { writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { PNG } from "pngjs";
 import { takeSnapshot } from "./snapshot.mjs";
 import { waitForLocalIdle } from "./readiness.mjs";
@@ -98,7 +100,7 @@ export async function captureStableFrames(capture, { wait, now = () => performan
 export async function capturePage(page, url, { clockTime } = {}) {
 	const clock = /\/features\/mfm\//.test(url) || !/\/(docs|blog)\//.test(url);
 	const errors = [];
-  let frameControl;
+	let frameControl;
 	const pendingLocalRequests = new Set();
 	let lastLocalActivity = performance.now();
 	page.on("request", (request) => {
@@ -124,7 +126,7 @@ export async function capturePage(page, url, { clockTime } = {}) {
 			report(`${response.status()} ${response.url()}`);
 	});
 	try {
-    frameControl = await startFrameControl(page);
+		frameControl = await startFrameControl(page);
 		if (clock) await page.clock.install({ time: new Date(clockTime ?? Date.now()) });
 		const response = await page.goto(url, {
 			waitUntil: "load",
@@ -292,10 +294,19 @@ export async function capturePage(page, url, { clockTime } = {}) {
 				errors,
 				finalPath: new URL(page.url()).pathname,
 			};
-    await frameControl?.pause();
+        const traceBefore = await page.evaluate(() => [...document.querySelectorAll("pre")].map(p => p.outerHTML));
+		await frameControl?.pause();
 		const { stable, capture: previous } = await captureStableFrames(() => takeSnapshot(page), {
 			wait: (ms) => page.waitForTimeout(ms),
 		});
+        const forensic = await page.evaluate(() => ({
+          html:document.documentElement.outerHTML,
+          metrics:{inner:[innerWidth,innerHeight],screen:[screen.width,screen.height],scroll:[scrollX,scrollY]},
+          fonts:{status:document.fonts.status,faces:[...document.fonts].map(f=>({family:f.family,status:f.status}))},
+          code:[...document.querySelectorAll("pre")].map(p=>({html:p.outerHTML,text:p.textContent,scroll:[p.scrollLeft,p.scrollTop],nodes:[p,...p.querySelectorAll("*")].map(n=>{const s=getComputedStyle(n);return {tag:n.localName,text:n.textContent,rect:n.getBoundingClientRect().toJSON(),style:Object.fromEntries(["display","visibility","opacity","color","backgroundColor","fontFamily","fontSize","fontStyle","fontWeight","lineHeight","transform","contentVisibility","contain","clipPath","overflow","filter"].map(k=>[k,s[k]]))}})}))
+        }));
+        const directory=process.argv.find(arg=>arg.startsWith("--output-dir="))?.slice(13);
+        if(directory) await writeFile(`${directory}/trace-${new URL(url).port}-${createHash("sha256").update(new URL(url).pathname).digest("hex").slice(0,12)}.json`,JSON.stringify({url,stable,traceBefore,forensic}));
 		if (!stable)
 			return {
 				status: "unstable",
@@ -320,30 +331,24 @@ export async function capturePage(page, url, { clockTime } = {}) {
 				),
 			],
 		};
+	} finally {
+		await frameControl?.close();
 	}
-  finally { await frameControl?.close(); }
 }
 
 export async function createFixtureContext(browser, options = {}) {
 	const context = await browser.newContext({
 		viewport: options.viewport ?? { width: 1440, height: 900 },
-    ...(process.env.VRT_NATIVE_SCREEN === "1" ? {screen:{width:800,height:600}} : {}),
+		...(options.screen ? { screen: options.screen } : {}),
 		locale: options.locale ?? "en-US",
 		timezoneId: "Asia/Tokyo",
 		colorScheme: options.colorScheme ?? "light",
 		reducedMotion: "reduce",
 		serviceWorkers: "block",
 	});
-  await context.route("**/*", async route => {
-    const url = new URL(route.request().url());
-    if (url.hostname !== "127.0.0.1") return route.abort();
-    if (process.env.VRT_JPEG_DELIVERY === "buffer" && /\.jpe?g$/i.test(url.pathname)) {
-      const response = await route.fetch();
-      const body = await response.body();
-      return route.fulfill({response, body});
-    }
-    return route.continue();
-  });
+	await context.route("**/*", (route) =>
+		new URL(route.request().url()).hostname === "127.0.0.1" ? route.continue() : route.abort(),
+	);
 	await context.addInitScript((colorScheme) => {
 		if (window !== window.top) return;
 		localStorage.setItem("miHub_io_emoji", JSON.stringify({ emojis: [] }));

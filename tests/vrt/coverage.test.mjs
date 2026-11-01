@@ -18,6 +18,8 @@ function fixtures() {
 					shard: `${index + 1}/2`,
 					sourceFingerprint: "source",
 					scriptHash: "script",
+					captureSettings: "controlled-frames/native-screen",
+					rendererFingerprint: "same-browser-args-and-physical-screen",
 					referenceOutputFingerprint: "reference",
 					candidateOutputFingerprint: "candidate",
 					benchmarkSha256: "metadata",
@@ -72,4 +74,16 @@ test("Mixed site artifacts cannot produce a passing result", () => {
 		() => validateCoverage(reports, paths, options),
 		/different candidateOutputFingerprint/,
 	);
+});
+
+test("Mixed frame-control settings cannot establish reproducible coverage", () => {
+	const reports = fixtures();
+	reports[1].manifest.captureSettings = "automatic-frames/viewport-screen";
+	assert.throws(() => validateCoverage(reports, paths, options), /different captureSettings/);
+});
+
+test("Different physical screen or browser arguments cannot be mixed across shards", () => {
+	const reports = fixtures();
+	reports[1].manifest.rendererFingerprint = "different-screen";
+	assert.throws(() => validateCoverage(reports, paths, options), /different rendererFingerprint/);
 });
