@@ -17,10 +17,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        viewport: [desktop, mobile]
+        viewport: [mobile]
         theme: [light, dark]
         raster: [software]
         retention: [none]
+        jpeg: [none, frame, tile, clear]
         isolation: [context]
         workers: [1]
     steps:
@@ -44,12 +45,13 @@ jobs:
           VRT_BROWSER_ISOLATION: ${{ matrix.isolation }}
           CONTROL_WORKERS: ${{ matrix.workers }}
           VRT_JPEG_RETENTION: ${{ matrix.retention }}
+          VRT_JPEG_POLICY: ${{ matrix.jpeg }}
         run: |
           node .vrt-control/clip-control.mjs
           node .vrt-control/raster-control.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: local-idle-${{ matrix.viewport }}-${{ matrix.theme }}
+          name: jpeg-policy-${{ matrix.theme }}-${{ matrix.jpeg }}
           path: output/playwright/
           retention-days: 7

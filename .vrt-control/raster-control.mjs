@@ -1,8 +1,8 @@
 import { spawnSync } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
-const allPaths = ["/de/docs/releases/", "/ja/docs/releases/", "/ja-ks/docs/releases/"];
+const allPaths = ["/ja/about-us/history/", "/ja-ks/about-us/history/", "/ja-ks/docs/for-developers/plugin/plugin-api-reference/", "/cn/docs/for-users/features/mfm/"];
 const outcomes = [];
-for (let repeat = 1; repeat <= 1; repeat++) {
+for (let repeat = 1; repeat <= 8; repeat++) {
   const paths = repeat === 1 ? allPaths : allPaths.filter(path => !path.endsWith("/releases/"));
   for (const comparison of ["unchanged-reference", "optimized"]) {
     const output = `output/playwright/${comparison}-${repeat}`;

@@ -76,6 +76,7 @@ const scriptHash = createHash("sha256")
 	.update(await readFile(new URL("./readiness.mjs", import.meta.url)))
 	.digest("hex");
 const manifest = {
+  jpegPolicy: process.env.VRT_JPEG_POLICY ?? "none",
 	startedAt,
 	sourceFingerprint: sourceBefore,
 	sample,
@@ -264,7 +265,8 @@ try {
 		"--force-color-profile=srgb",
 		"--disable-threaded-animation",
 	];
-	browser = await chromium.launch({ args: manifest.browserArgs });
+	if (process.env.VRT_JPEG_POLICY === "clear") manifest.browserArgs.push("--enable-gpu-benchmarking");
+  browser = await chromium.launch({ args: manifest.browserArgs });
 	manifest.browserVersion = browser.version();
 	await writeFile(manifestFile, JSON.stringify(manifest, null, 2) + "\n");
 	console.log(

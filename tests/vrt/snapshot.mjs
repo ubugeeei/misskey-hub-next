@@ -2,7 +2,14 @@
 // per-screenshot DOM changes. Very long release histories exceed
 // 130,000px; a single decoded PNG can occupy >700MB. CDP clips preserve the same
 // document coordinates (including fixed elements) while bounding decode memory.
+async function refreshJpegs(page) {
+  await page.evaluate(async () => {
+    await Promise.all([...document.images].filter(img => img.currentSrc && img.naturalWidth && new URL(img.currentSrc).origin === location.origin && /\.jpe?g$/i.test(new URL(img.currentSrc).pathname)).map(img => img.decode()));
+  });
+}
 export async function takeSnapshot(page) {
+  const policy = process.env.VRT_JPEG_POLICY ?? "none";
+  if (policy === "frame") await refreshJpegs(page);
 	const session = await page.context().newCDPSession(page);
 	try {
 		const { cssContentSize } = await session.send("Page.getLayoutMetrics");
@@ -11,6 +18,8 @@ export async function takeSnapshot(page) {
 			tiles = [];
 		for (let y = 0; y < height; y += 4096) {
 			const tileHeight = Math.min(4096, height - y);
+			if (policy === "tile") await refreshJpegs(page);
+      if (policy === "clear") await page.evaluate(() => { chrome.gpuBenchmarking.clearImageCache(); chrome.gpuBenchmarking.setNeedsDisplayOnAllLayers(); });
 			const { data } = await session.send("Page.captureScreenshot", {
 				format: "png",
 				optimizeForSpeed: true,
