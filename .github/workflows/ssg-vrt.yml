@@ -1,25 +1,17 @@
-name: SSG raster reproducibility control
+name: SSG frame contract
 on:
   workflow_dispatch:
 permissions:
   contents: read
-  actions: read
 jobs:
-  control:
+  contract:
     runs-on: ubuntu-latest
     container:
       image: mcr.microsoft.com/playwright:v1.64.1-noble@sha256:47b510dd9230bf0b9bfc9b20102241e577ea7a99334ab4c3ca19f19770e9b8ea
     env:
       PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
-      VRT_DETERMINISTIC_RASTER: "1"
-      VRT_FORCE_TILES: "1"
-    timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        theme: [light, dark]
-        viewport: [desktop, mobile]
-        screen: ["0", "1"]
+      VRT_CONTROLLED_FRAMES: "1"
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -28,30 +20,5 @@ jobs:
           node-version: "26.13.0"
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
-      - uses: actions/download-artifact@v4
-        with:
-          name: vrt-sites
-          run-id: 41285234902
-          github-token: ${{ github.token }}
-      - name: Repeat unchanged reference control and optimized comparison
-        env:
-          CONTROL_VIEWPORT: ${{ matrix.viewport }}
-          CONTROL_THEME: ${{ matrix.theme }}
-          VRT_RASTER_VARIANT: software
-          VRT_BROWSER_ISOLATION: context
-          CONTROL_WORKERS: "1"
-          VRT_JPEG_RETENTION: none
-          VRT_BROWSER_CHANNEL: shell
-          VRT_SOFTWARE_COMPOSITING: "1"
-          VRT_NATIVE_SCREEN: ${{ matrix.screen }}
-          VRT_JPEG_DELIVERY: direct
-          VRT_FRAME_MODE: manual
-        run: |
-          node .vrt-control/clip-control.mjs
-          node .vrt-control/raster-control.mjs
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: qualify-${{ matrix.viewport }}-${{ matrix.theme }}-${{ matrix.screen }}
-          path: output/playwright/
-          retention-days: 7
+      - name: Verify every tiled pixel and unchanged viewport metrics
+        run: node tests/vrt/frame-contract.mjs
